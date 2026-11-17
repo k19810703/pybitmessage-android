@@ -60,7 +60,44 @@ nonceTrialsPerByte = max(nonceTrialsPerByte, defaults.networkDefaultProofOfWorkN
 
 修复：`api.py` 两个 handler 改用 `config.getint()`；`class_addressGenerator` 对进队列的两个难度值做 `int()` 兜底。commit `5c40095`。
 
-**方法论收获**：之前"API 挂起"被误判为"线程没起来"，实际是线程起来后**在异常中静默死亡**。`threading.excepthook`（`src/main.py`）与生成器里的 `AGENDA:` 打印把这一层变成可见，这组观测点保留在代码里。
+**方法论收获**：之前"API 挂起"被误判为"线程没起来"
+
+#### M2.4.5b 后续：又挖出 2 个 py3 阻塞（commit `d91ae20`）
+
+| # | 问题 | 根因 | 修复 |
+|---|---|---|---|
+| 1 | 地址生成线程 `TypeError('option values must be strings')` | `_decode()` 返回 **bytes**，label 直接进了 `config.set()`（py3 只收 str） | 新增 `_decode_text()`，label 三处改用它；生成器 `save_address` 对 bytes 做兜底 decode |
+| 2 | `makeCryptor()` 抛 `TypeError: argument should be integer or bytes-like object, not 'str'` | `pyelliptic/arithmetic.decode()` 里 `code_string` 是 bytes，索引 str 得到 str，`bytes.find(str)` 在 py3 非法 | `decode()` 入口把 str 编码成 bytes |
+
+**本地端到端验证（不经 Android，真实生成器线程）**：
+
+```
+AGENDA: addressGenerator thread started
+AGENDA: got request 'createRandomAddress'
+AGENDA: address returned to caller
+RESULT: BM-2cU8SNexEcq6FCgeuMKypNnXrGQZ8ne995
+```
+
+> 注：本地复现必须设 `state.kivy = True`，否则 `tr.py` 会走 PyQt 分支并 `os._exit(0)`（这个坑已在 M2.3 记录）。
+
+#### M2.4.5c API 超时（已生效）
+
+`createRandomAddress` 现在 90s 内无结果会返回 `Fault 21`，不再把单线程 XML-RPC 服务器永久占死。设备实测：修复前挂起无响应；加入超时后 90.0s 返回 Fault 21。
+
+#### ⏸ 设备侧验证：被网络卡住（2026-11-17 22:30）
+
+- CI 构建成功：[run 44091360456](https://github.com/k19810703/pybitmessage-android/actions/runs/44091360456)，产物 `pybitmessage-apk-5`
+- 但 APK 下载在 20/25 MB 处反复超时（`curl` exit 28，持续 1 小时，速率约 15–30 KB/s）
+- 因此 **G2.4 / A1 尚未取得设备证据**，结论暂记为"代码修复已在本地验证，待设备复验"
+
+**恢复动作**：网络可用时执行
+
+```bash
+gh run download 44091360456 --repo k19810703/pybitmessage-android -n pybitmessage-apk-5 -D PyBitmessage-android/artifacts
+adb install -r PyBitmessage-android/artifacts/pybitmessage-apk-5/*.apk
+# 开 API 后：
+python3 -c "…createRandomAddress…"   # 期望 90s 内返回 BM-2...
+```，实际是线程起来后**在异常中静默死亡**。`threading.excepthook`（`src/main.py`）与生成器里的 `AGENDA:` 打印把这一层变成可见，这组观测点保留在代码里。
 
 ### 1.7 M2.4 期间新发现的 4 个 py3/Android 问题（均已修）
 

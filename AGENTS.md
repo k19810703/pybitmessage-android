@@ -11,11 +11,11 @@
 | 项 | 值 |
 |---|---|
 | 目标 | 一个 APK，装了的设备互相能发加密消息（无自建服务器，不上架） |
-| 当前阶段 | **M2.4 部分完成，卡在 `M2.4.5`（地址创建通路）** |
+| 当前阶段 | **M2.4.5 代码已修好（本地验证通过），等设备复验** |
 | 已完成 | M1 构建链路；M2.1 能力探测（**G2.1**）；M2.2 Python 3 解禁（**G2.2**）；M2.3 真实核心启动（**G2.3**：APK 起来后跑的是真核心，已建库、显示真实引导页） |
 | 仓库 | **<https://github.com/k19810703/pybitmessage-android>**（public，默认分支 `android-port`） |
 | 仓库结构 | `PyBitmessage/`（代码）/ `PyBitmessage-android/`（文档）/ `artifacts/`（gitignore） |
-| 最近成功构建 | 仓库重建前：run 44044383679（旧 fork）；**重建后需在新仓库首跑验证** |
+| 最近成功构建 | [run 44091360456](https://github.com/k19810703/pybitmessage-android/actions/runs/44091360456)（含地址生成修复），11 分 27 秒 |
 | 基线 APK | `PyBitmessage-android/artifacts/pybitmessage-apk-16/pybitmessagemock-0.1.2-arm64-v8a-debug.apk`（API 可用、含 INTERNET） |
 | 包名（现状） | `at.bitmessage.pybitmessagemock`（Mock 壳） |
 | 包名（M2.5.1 之后） | `at.bitmessage.pybitmessage` —— 本文所有 `run-as`/`am start` 命令以**当前包名**为准，改造后需替换 |
@@ -92,7 +92,7 @@ M6 UI 中文化+平板    13 任务 / 6–8 天   ← 产品需求，可与 M3 �
 | M2.4.3 重启后地址不变 | ⏸ 阻塞（还没有地址） |
 | M2.5.2 INTERNET 权限 | ✅ 完成（API 已能在设备上响应） |
 | M2.7.1 API 可用 | ✅ 完成（`clientStatus` 正常返回） |
-| **M2.4.5 地址创建通路** | 🔴 **当前唯一硬阻塞**：UI 引导页跳转无效；API `createRandomAddress` 挂起（generator 线程不消费队列） |
+| **M2.4.5 地址创建通路** | 🟡 **代码已通**：3 个 py3 阻塞已修，本地生成出 `BM-2cU8SNex…`；**设备复验被网络挡住**（APK 下载超时） |
 | 其他 | ⬜ 未开始 |
 
 **当前代码状态**
@@ -107,7 +107,7 @@ remote: origin → git@github.com:k19810703/pybitmessage-android.git
 - 能出包：push 到 `android-port` 即触发，约 9–15 分钟
 - 能装机：模拟器 `Pixel_6_API_33`（arm64-v8a / Android 13）
 - 已有：`INTERNET` 权限、本地 API 可用（`clientStatus` 正常）
-- 仍缺：**还创建不出地址** → 见 M2.4.5（当前唯一硬阻塞）
+- 仍缺：设备侧复验（APK 已构建：run 44091360456 / `pybitmessage-apk-5`，下载受阻）
 
 ---
 
@@ -306,3 +306,4 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-17 | v1.5 | M2.4 部分完成：API 打通、权限就位；记录 M2.4.5 地址创建阻塞 |
 | 2026-11-17 | v1.6 | 新增产品需求：UI 中文化 + 平板适配（M6，13 任务，6–8 天） |
 | 2026-11-17 | v2.0 | 仓库重建：不在上游 clone 上开发，改为单仓库（代码+文档），CI workflow 移到仓库根 |
+| 2026-11-17 | v2.1 | M2.4.5 代码修复完成（本地验证）；设备复验被网络阻塞 |
