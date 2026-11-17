@@ -153,6 +153,8 @@ class addressGenerator(StoppableThread):
                     ' one version %s address which it cannot do.\n',
                     addressVersionNumber)
                 continue
+            nonceTrialsPerByte = int(nonceTrialsPerByte)
+            payloadLengthExtraBytes = int(payloadLengthExtraBytes)
             if nonceTrialsPerByte == 0:
                 nonceTrialsPerByte = config.getint(
                     'bitmessagesettings', 'defaultnoncetrialsperbyte')

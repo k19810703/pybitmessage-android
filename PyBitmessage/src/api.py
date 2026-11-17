@@ -748,11 +748,11 @@ class BMRPCDispatcher(object):
           (as opposed to a 19 byte hash).
         """
 
-        nonceTrialsPerByte = self.config.get(
+        nonceTrialsPerByte = self.config.getint(
             'bitmessagesettings', 'defaultnoncetrialsperbyte'
         ) if not totalDifficulty else int(
             networkDefaultProofOfWorkNonceTrialsPerByte * totalDifficulty)
-        payloadLengthExtraBytes = self.config.get(
+        payloadLengthExtraBytes = self.config.getint(
             'bitmessagesettings', 'defaultpayloadlengthextrabytes'
         ) if not smallMessageDifficulty else int(
             networkDefaultPayloadLengthExtraBytes * smallMessageDifficulty)
@@ -798,11 +798,11 @@ class BMRPCDispatcher(object):
         address version and the most available stream.
         """
 
-        nonceTrialsPerByte = self.config.get(
+        nonceTrialsPerByte = self.config.getint(
             'bitmessagesettings', 'defaultnoncetrialsperbyte'
         ) if not totalDifficulty else int(
             networkDefaultProofOfWorkNonceTrialsPerByte * totalDifficulty)
-        payloadLengthExtraBytes = self.config.get(
+        payloadLengthExtraBytes = self.config.getint(
             'bitmessagesettings', 'defaultpayloadlengthextrabytes'
         ) if not smallMessageDifficulty else int(
             networkDefaultPayloadLengthExtraBytes * smallMessageDifficulty)
