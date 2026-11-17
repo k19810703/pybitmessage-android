@@ -1,0 +1,45 @@
+# ---- 构建产物 / 大文件（不进 git）----
+PyBitmessage-android/artifacts/
+*.apk
+*.aab
+*.apk.idsig
+*.zip
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- Kivy / buildozer / p4a ----
+.buildozer/
+bin/
+*.spec.bak
+.failed_deps
+
+# ---- 运行时数据（含私钥，绝不入库）----
+keys.dat
+!PyBitmessage/src/bitmessagekivy/tests/**/keys.dat
+messages.dat
+knownnodes.dat
+*.lock
+*.bak
+
+# ---- OS / 编辑器 ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ---- 本地临时 ----
+*.log
+/tmp/
+
+# ---- 不提交：节点间 TLS 的自签证书/私钥（上游自带，扫描器会拦截）----
+# 需要 TLS 时在本地生成：openssl req -x509 -newkey rsa:2048 -nodes ...
+PyBitmessage/src/sslkeys/

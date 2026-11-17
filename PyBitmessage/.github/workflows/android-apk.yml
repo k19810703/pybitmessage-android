@@ -1,0 +1,124 @@
+name: Android APK
+
+# 说明：
+# - 本仓库自带的 .github/workflows/android.yml 被硬编码为只在非 github.com 上运行，
+#   所以在 GitHub 上不会触发；这个 workflow 是给 GitHub Actions 用的版本。
+# - 手动触发，或推送到 android-port 分支时自动构建。
+# - 产物：Actions run 页面底部的 artifact（zip 里是 *.apk）。
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [android-port]
+    paths:
+      - '.github/workflows/android-apk.yml'
+      - 'packages/android/buildozer.spec'
+      - 'src/**'
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LC_ALL: en_US.UTF-8
+  LANG: en_US.UTF-8
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+
+jobs:
+  build:
+    name: buildozer android debug
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ubuntu-latest 镜像默认 JDK 已是 25，Gradle 8.14 只认到 24，
+      # 会报 "Unsupported class file major version 69"。必须显式钉 17。
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: System dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential autoconf automake libtool libltdl-dev \
+            libffi-dev libssl-dev pkg-config cmake zip unzip \
+            libzbar0 gettext
+          sudo locale-gen en_US.UTF-8 || true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # p4a v2024.01.21 的 jpeg recipe 用 libjpeg-turbo 2.0.1，其 CMakeLists 仍是
+      # cmake_minimum_required(VERSION 2.8.12)；runner 自带的 CMake 4.x 已移除 <3.5 兼容，
+      # 会报 "Compatibility with CMake < 3.5 has been removed"。这里钉回 3.31。
+      - name: Pin CMake 3.31
+        run: |
+          python -m pip install 'cmake==3.31.6'
+          sudo ln -sf "$(command -v cmake)" /usr/local/bin/cmake
+          cmake --version | head -1
+
+
+      - name: Install buildozer
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install buildozer 'cython==3.0.10' virtualenv
+          buildozer --version
+
+      # buildozer 不认仓库里的 pybitmessage -> src 软链，按官方 CI 的做法铺平
+      - name: Prepare source tree
+        run: |
+          rm -rf src/pybitmessage && mkdir -p src/pybitmessage
+          cp src/*.py src/pybitmessage
+          cp -r src/bitmessagekivy src/backend src/mockbm src/images src/pybitmessage
+          ls src/pybitmessage | head -20
+
+      # Android SDK / NDK / p4a 源码都在 ~/.buildozer 里，缓存它可以把首次的 ~8 分钟下载省掉。
+      # 用 restore + save 拆分，保证构建失败时也能存下已下载的 SDK/NDK。
+      - name: Restore p4a toolchain cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.buildozer
+          key: p4a-v2-${{ runner.os }}-${{ hashFiles('packages/android/buildozer.spec') }}
+          restore-keys: |
+            p4a-v2-${{ runner.os }}-
+
+      - name: Build debug APK
+        working-directory: packages/android
+        run: |
+          set -o pipefail
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" > ~/.gradle/gradle.properties
+          echo "JAVA_HOME=$JAVA_HOME"; java -version
+          buildozer android debug 2>&1 | tee build.log
+
+      - name: Save p4a toolchain cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.buildozer
+          key: p4a-v2-${{ runner.os }}-${{ hashFiles('packages/android/buildozer.spec') }}
+
+      - name: Show artifacts and tail log
+        if: always()
+        run: |
+          echo '--- bin ---'
+          ls -lh packages/android/bin/ || true
+          echo '--- tail build.log ---'
+          tail -80 packages/android/build.log || true
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pybitmessage-apk-${{ github.run_number }}
+          path: packages/android/bin/*.apk
+          if-no-files-found: error
+          retention-days: 14
