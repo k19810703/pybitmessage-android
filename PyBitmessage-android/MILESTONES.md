@@ -134,7 +134,7 @@ M6.1（可与 M3 并行）─► M6.2 ─► M6.3 ─► M6.4 ─► G6（在 M5
 |---|---|---|---|---|
 | M2.4.1 ✅ | 启动时把 `BITMESSAGE_HOME` 指到应用私有目录 | 入口处 `os.environ['BITMESSAGE_HOME'] = app_storage_path()`（p4a `android.storage`） | 2h | **F**：`adb shell run-as at.bitmessage.pybitmessage ls files/keys.dat` 存在 |
 | M2.4.2 ✅ | 单实例锁在 Android 可用 | `src/singleinstance.py` 失败时降级（try/except 不阻塞启动） | 1h | **L**：连续启动两次不崩；无 `flock` 异常 |
-| M2.4.3 ⏸ | 重启保留身份 | 无（验证） | 1h | **F**：`am force-stop` 后重启，`keys.dat` 里的地址不变（对比前后 hash） |
+| M2.4.3 ✅ | 重启保留身份 | 无（验证） | 1h | **F**：`am force-stop` 后重启，`keys.dat` 里的地址不变（对比前后 hash） |
 
 > **Gate G2.4**：地址持久化成立（D6 的一半提前验证）。
 
@@ -144,17 +144,18 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 | ID | 任务 | 改动 | 预估 | 验收标准 |
 |---|---|---|---|---|
-| M2.4.5a | 修 UI 引导页跳转 | `src/bitmessagekivy/kv/login.kv`：`set_screen('random')` 指向根 `scr_mngr` 里真实存在的屏幕（或把 random 屏移入根管理器） | 2h | **S**：点 Proceed Next 能进入随机地址表单 |
+| M2.4.5a ⬜ | 修 UI 引导页跳转 | `src/bitmessagekivy/kv/login.kv`：`set_screen('random')` 指向根 `scr_mngr` 里真实存在的屏幕（或把 random 屏移入根管理器） | 2h | **S**：点 Proceed Next 能进入随机地址表单 |
 | M2.4.5b ✅ | 查清 `addressGenerator` 线程为何不消费队列 | 在 `class_addressGenerator.run()` 入口加日志；必要时用 `sys.excepthook`/`threading.excepthook` 抓守护线程异常 | 3h | **L**：logcat 出现 `addressGenerator: got request` 且 API 调用在 60s 内返回 |
 | M2.4.5c ✅ | API 调用加超时，避免单线程服务器被永久阻塞 | `src/api.py`：`apiAddressGeneratorReturnQueue.get(timeout=...)` 并返回明确错误 | 1h | **A**：失败时返回 Fault 而不是挂死 |
 
-> **Gate G2.4**：`keys.dat` 在私有目录，重启后地址不变 —— 依赖 M2.4.5 先造出地址。
+> **Gate G2.4 ✅ 已通过（2026-11-18）**：`keys.dat` 在私有目录，地址 `BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD` 重启后不变。
+> A1 也顺带达成：地址生成 **3.7 秒**（验收线 60 秒）。
 
 > **M2.4.5 进度（2026-11-17 22:30）**
 > - ✅ 根因找到：`config.get()` 返回 str → `max(str, int)` 崩溃；随后又发现 label 是 bytes、`arithmetic.decode()` 不接受 str，共 3 处 py3 阻塞，均已修（`5c40095`、`d91ae20`）
 > - ✅ 本地真实生成器线程跑通：`RESULT: BM-2cU8SNexEcq6FCgeuMKypNnXrGQZ8ne995`
 > - ✅ API 超时生效：90s 后返回 `Fault 21`，不再占死服务器
-> - ⏸ **设备复验未完成**：CI 产物 25 MB，当天网络只有 15–30 KB/s，下载反复超时（20/25 MB）
+> - ✅ **设备复验完成（2026-11-18）**：改用热补丁方式绕过 25 MB 下载；`createRandomAddress` 3.7s 返回 `BM-2cX1KSM87…`，重启后地址不变（详见 EVIDENCE §1.9）
 > - 待办：网络恢复后装 `pybitmessage-apk-5` 复验，产出 A1（60s 内出地址）与 G2.4（重启地址不变）证据
 
 ### M2.5 打包参数（0.5 天）

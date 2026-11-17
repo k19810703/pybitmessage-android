@@ -90,6 +90,23 @@ RESULT: BM-2cU8SNexEcq6FCgeuMKypNnXrGQZ8ne995
 - 但 APK 下载在 20/25 MB 处反复超时（`curl` exit 28，持续 1 小时，速率约 15–30 KB/s）
 - 因此 **G2.4 / A1 尚未取得设备证据**，结论暂记为"代码修复已在本地验证，待设备复验"
 
+### 1.9 ✅ M2.4.5 设备验证完成（2026-11-18 01:50）
+
+> 网络下载 25 MB APK 反复超时，改用**热补丁**方式验证：把改动过的 `.py` 推入已安装应用的
+> `files/app/` 并删掉对应 `.pyc`，重启即生效（p4a 的 `ANDROID_ENTRYPOINT` 是 `main.py`，
+> 会重新编译源码）。见 AGENTS.md §6.7。
+
+| 验收项 | 结果 | 证据 |
+|---|---|---|
+| **A1 地址生成 < 60s** | ✅ **3.7 秒** | `createRandomAddress` 返回 `BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD`，耗时 3.7s |
+| **G2.4 重启后地址不变** | ✅ | `force-stop` → 重启（pid 13034）→ `keys.dat` 仍是 `[BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD]` |
+| M2.4.3 重启保留身份 | ✅ | 同上 |
+| M2.4.5b 生成器线程 | ✅ | logcat：`AGENDA: addressGenerator thread started` → 请求 → 3.7s 返回 |
+| M2.4.5c API 超时 | ✅ | 修复前挂死；现在正常路径 3.7s 返回，异常路径 90s 返回 `Fault 21` |
+
+**热补丁法的适用边界**：只改 `.py`（不含 C 扩展、不含 p4a recipe、不含 `buildozer.spec`）时可用；
+一旦涉及新依赖或打包参数，仍必须走 CI 出包。
+
 **恢复动作**：网络可用时执行
 
 ```bash

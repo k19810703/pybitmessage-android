@@ -11,7 +11,7 @@
 | 项 | 值 |
 |---|---|
 | 目标 | 一个 APK，装了的设备互相能发加密消息（无自建服务器，不上架） |
-| 当前阶段 | **M2.4.5 代码已修好（本地验证通过），等设备复验** |
+| 当前阶段 | **M2.4 完成（G2.4 ✅，地址 3.7s 生成）；下一任务 = M2.6 / M2.7（联网）** |
 | 已完成 | M1 构建链路；M2.1 能力探测（**G2.1**）；M2.2 Python 3 解禁（**G2.2**）；M2.3 真实核心启动（**G2.3**：APK 起来后跑的是真核心，已建库、显示真实引导页） |
 | 仓库 | **<https://github.com/k19810703/pybitmessage-android>**（public，默认分支 `android-port`） |
 | 仓库结构 | `PyBitmessage/`（代码）/ `PyBitmessage-android/`（文档）/ `artifacts/`（gitignore） |
@@ -89,10 +89,11 @@ M6 UI 中文化+平板    13 任务 / 6–8 天   ← 产品需求，可与 M3 �
 | **G2.3 核心启动闸门** | ✅ **已通过**（App 存活、DB 已建 10 表、真实引导页） |
 | M2.4.1 `BITMESSAGE_HOME` | ✅ 完成（私有目录已建 keys.dat 等） |
 | M2.4.2 单实例锁降级 | ✅ 完成（`204b753d`） |
-| M2.4.3 重启后地址不变 | ⏸ 阻塞（还没有地址） |
+| M2.4.3 重启后地址不变 | ✅ 完成（force-stop 重启后仍为同一地址） |
+| **G2.4 闸门** | ✅ **已通过** |
 | M2.5.2 INTERNET 权限 | ✅ 完成（API 已能在设备上响应） |
 | M2.7.1 API 可用 | ✅ 完成（`clientStatus` 正常返回） |
-| **M2.4.5 地址创建通路** | 🟡 **代码已通**：3 个 py3 阻塞已修，本地生成出 `BM-2cU8SNex…`；**设备复验被网络挡住**（APK 下载超时） |
+| M2.4.5 地址创建通路 | ✅ 设备验证通过：`createRandomAddress` **3.7s** 返回 `BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD` |
 | 其他 | ⬜ 未开始 |
 
 **当前代码状态**
@@ -107,7 +108,8 @@ remote: origin → git@github.com:k19810703/pybitmessage-android.git
 - 能出包：push 到 `android-port` 即触发，约 9–15 分钟
 - 能装机：模拟器 `Pixel_6_API_33`（arm64-v8a / Android 13）
 - 已有：`INTERNET` 权限、本地 API 可用（`clientStatus` 正常）
-- 仍缺：设备侧复验（APK 已构建：run 44091360456 / `pybitmessage-apk-5`，下载受阻）
+- 已有：真实地址 `BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD`（生成 3.7s，重启不丢）
+- 仍缺：**网络连接数还是 0**（`dontconnect=true` 首启默认）→ M2.6 / M2.7
 
 ---
 
@@ -239,6 +241,22 @@ git -C PyBitmessage checkout <good_commit> -- <path>  # 只回退单个文件
 
 `EVIDENCE.md` 不只记成功。**每次失败都追加一条**：症状 → 定位到的层 → 根因 → 修复 commit。这样同一类问题第二次出现时能直接搜到。
 
+### 6.7 纯 Python 改动的热补丁调试法（网络差时非常有用）
+
+APK 动辄 25 MB，网络不稳时下载很痛。**只改 `.py`** 的改动可以直接推进已安装的应用：
+
+```bash
+PKG=at.bitmessage.pybitmessagemock
+for f in api.py class_addressGenerator.py main.py; do
+  adb push PyBitmessage/src/$f /data/local/tmp/$f
+  adb shell "run-as $PKG sh -c 'cat /data/local/tmp/$f > files/app/$f && rm -f files/app/${f%.py}.pyc'"
+done
+adb shell am force-stop $PKG && adb shell am start -n $PKG/org.kivy.android.PythonActivity
+```
+
+原理：p4a 的 `ANDROID_ENTRYPOINT` 是 `main.py`（源码），删掉旧 `.pyc` 后重启会重新编译。
+**局限**：新增依赖、C 扩展、`buildozer.spec` 改动仍必须走 CI 出包。
+
 ### 6.6 已知的"看着像 bug 其实是环境"清单
 
 | 症状 | 其实是 | 处理 |
@@ -307,3 +325,4 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-17 | v1.6 | 新增产品需求：UI 中文化 + 平板适配（M6，13 任务，6–8 天） |
 | 2026-11-17 | v2.0 | 仓库重建：不在上游 clone 上开发，改为单仓库（代码+文档），CI workflow 移到仓库根 |
 | 2026-11-17 | v2.1 | M2.4.5 代码修复完成（本地验证）；设备复验被网络阻塞 |
+| 2026-11-18 | v2.2 | M2.4 完成：G2.4 通过、A1 达成（3.7s）；新增热补丁调试法 §6.7 |
