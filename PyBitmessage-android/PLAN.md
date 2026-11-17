@@ -314,14 +314,17 @@ buildozer -v android debug                    # 出问题时看详细日志
 
 ### 结论
 
+> 说明：本节记录的是仓库重建**之前**在旧 clone/fork 上的构建（历史证据，链接仍可访问）。
+> 重建后 CI 在 `k19810703/pybitmessage-android` 的仓库根 workflow 上运行，命令见 `MILESTONES.md` §11。
+
 **远程构建 + 本机侧载的链路已闭环**，单次出包 **约 9 分钟**（含缓存命中）。
 
 | 项 | 值 |
 |---|---|
-| Fork 仓库 | <https://github.com/k19810703/PyBitmessage>（public） |
+| Fork 仓库 | <https://github.com/k19810703/pybitmessage-android>（public） |
 | 工作分支 | `android-port`（也是 fork 的默认分支，`workflow_dispatch` 需要在默认分支上） |
 | Workflow | `.github/workflows/android-apk.yml` |
-| 成功 run | <https://github.com/k19810703/PyBitmessage/actions/runs/44013702969>（9 分 06 秒） |
+| 成功 run | <https://github.com/k19810703/pybitmessage-android/actions/runs/44013702969>（9 分 06 秒） |
 | 产物 | `pybitmessagemock-0.1.2-arm64-v8a-debug.apk`（25 MB） |
 | 本机落盘 | `PyBitmessage-android/artifacts/pybitmessage-apk-7/` |
 | 设备验证 | `Pixel_6_API_33`（arm64-v8a / Android 13）：安装成功、启动成功、界面正常（截图 `artifacts/screenshot-2.png`） |
@@ -360,11 +363,11 @@ requirements = python3,kivy,sqlite3,kivymd==1.0.2,Pillow,kivy-garden.qrcode,qrco
 
 ```bash
 # 触发一次构建（也可直接 push 到 android-port）
-gh workflow run "Android APK" --repo k19810703/PyBitmessage --ref android-port
+gh workflow run "Android APK" --repo k19810703/pybitmessage-android --ref android-port
 
 # 等它跑完并下载产物
-gh run watch --repo k19810703/PyBitmessage
-gh run download --repo k19810703/PyBitmessage -D PyBitmessage-android/artifacts
+gh run watch --repo k19810703/pybitmessage-android
+gh run download --repo k19810703/pybitmessage-android -D PyBitmessage-android/artifacts
 
 # 装机
 ~/Documents/platform-tools/adb install -r PyBitmessage-android/artifacts/*/*.apk

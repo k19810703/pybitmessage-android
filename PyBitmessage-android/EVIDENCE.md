@@ -10,7 +10,7 @@
 
 | ID | 日期 | 任务 | 结论 | 证据 | 备注 |
 |---|---|---|---|---|---|
-| M1 | 2026-11-17 | 构建链路打通（Mock APK） | ✅ | run [44013702969](https://github.com/k19810703/PyBitmessage/actions/runs/44013702969)，9m06s；产物 `artifacts/pybitmessage-apk-7/pybitmessagemock-0.1.2-arm64-v8a-debug.apk`（25 MB，`libpython3.11.so`） | 七轮迭代过程见 `PLAN.md` §7.5 |
+| M1 | 2026-11-17 | 构建链路打通（Mock APK） | ✅ | run [44013702969](https://github.com/k19810703/pybitmessage-android/actions/runs/44013702969)，9m06s；产物 `artifacts/pybitmessage-apk-7/pybitmessagemock-0.1.2-arm64-v8a-debug.apk`（25 MB，`libpython3.11.so`） | 七轮迭代过程见 `PLAN.md` §7.5 |
 | M1-A | 2026-11-17 | 装机启动验证（模拟器 Pixel_6_API_33） | ✅ | `adb install` = Success；`pm list packages` 有 `at.bitmessage.pybitmessagemock`；`pidof` = 8028；截图 `artifacts/screenshot-2.png` | 首启有 30–60s 解压 `_python_bundle` |
 | M2.0 | 2026-11-17 | 前置事实核查：v0.6 能否在 Python 3 运行 | ❌ 不可直接运行 | `BITMESSAGE_HOME=/tmp/bmtest python3 src/bitmessagemain.py -t` → `ERROR: PyBitmessage does not support Python 3+`；源码 `src/depends.py:445` `if six.PY3: sys.exit()` | 已拆为任务 M2.2；不影响方案可行性（改一行即可） |
 | M2.1.1 | 2026-11-17 | 启动自检探针（run 44024863827） | ✅ | 设备 logcat 输出 9 行 `PROBE`（见 §1.1）；APK `artifacts/pybitmessage-apk-8/` | 探针放在 `src/main.py` 入口最前，永不抛异常 |

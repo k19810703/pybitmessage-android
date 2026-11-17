@@ -2,7 +2,7 @@
 
 > v2 · 2026-11-17 · 本版重点：**任务细分 + 每条任务的可执行验收标准**
 > 前置文档：`PLAN.md`（方案与构建环境）
-> 代码库：`PyBitmessage` @ `v0.6`；fork `k19810703/PyBitmessage`；工作分支 `android-port`
+> 代码库：`PyBitmessage/`（本仓库子目录）@ v0.6 状态；仓库 <https://github.com/k19810703/pybitmessage-android>；工作分支 `android-port`
 
 ---
 
@@ -50,7 +50,7 @@
 
 | 项 | 状态 |
 |---|---|
-| 构建 | GitHub Actions 约 9 分钟出包（[run 44013702969](https://github.com/k19810703/PyBitmessage/actions/runs/44013702969)） |
+| 构建 | GitHub Actions 约 9 分钟出包（[run 44013702969](https://github.com/k19810703/pybitmessage-android/actions/runs/44013702969)） |
 | 已固定参数 | `minapi=24`、`archs=arm64-v8a`、`p4a.branch=v2024.01.21`（CPython 3.11.5）、JDK17、CMake 3.31 |
 | 现有 APK | `pybitmessagemock-0.1.2-arm64-v8a-debug.apk`：能装、能启动、界面正常，但跑的是 Mock 线程、无 `INTERNET` 权限 |
 
@@ -396,8 +396,8 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 git -C PyBitmessage add -A && git -C PyBitmessage commit -m "M2.3.2: ..." && git -C PyBitmessage push fork android-port
 
 # 2) 等 CI + 下载
-gh run watch --repo k19810703/PyBitmessage
-gh run download --repo k19810703/PyBitmessage -D PyBitmessage-android/artifacts
+gh run watch --repo k19810703/pybitmessage-android
+gh run download --repo k19810703/pybitmessage-android -D PyBitmessage-android/artifacts
 
 # 3) 装机 + 验收（按任务的 L/F/A/S/T 标准逐条打勾）
 ~/Documents/platform-tools/adb install -r PyBitmessage-android/artifacts/*/*.apk
