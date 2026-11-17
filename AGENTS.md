@@ -13,9 +13,9 @@
 | 目标 | 一个 APK，装了的设备互相能发加密消息（无自建服务器，不上架） |
 | 当前阶段 | **M2.4 部分完成，卡在 `M2.4.5`（地址创建通路）** |
 | 已完成 | M1 构建链路；M2.1 能力探测（**G2.1**）；M2.2 Python 3 解禁（**G2.2**）；M2.3 真实核心启动（**G2.3**：APK 起来后跑的是真核心，已建库、显示真实引导页） |
-| 代码分支 | `PyBitmessage/` → `android-port`（HEAD `ea73b858`），推到 `fork`，不推 `origin` |
-| 远端 | fork: `k19810703/PyBitmessage`（public，默认分支就是 `android-port`） |
-| 最近成功构建 | [run 44044383679](https://github.com/k19810703/PyBitmessage/actions/runs/44044383679)（含 INTERNET 权限），8 分 26 秒 |
+| 仓库 | **<https://github.com/k19810703/pybitmessage-android>**（public，默认分支 `android-port`） |
+| 仓库结构 | `PyBitmessage/`（代码）/ `PyBitmessage-android/`（文档）/ `artifacts/`（gitignore） |
+| 最近成功构建 | 仓库重建前：run 44044383679（旧 fork）；**重建后需在新仓库首跑验证** |
 | 基线 APK | `PyBitmessage-android/artifacts/pybitmessage-apk-16/pybitmessagemock-0.1.2-arm64-v8a-debug.apk`（API 可用、含 INTERNET） |
 | 包名（现状） | `at.bitmessage.pybitmessagemock`（Mock 壳） |
 | 包名（M2.5.1 之后） | `at.bitmessage.pybitmessage` —— 本文所有 `run-as`/`am start` 命令以**当前包名**为准，改造后需替换 |
@@ -31,14 +31,14 @@
 | `PyBitmessage-android/MILESTONES.md` | **任务与验收的唯一事实来源** | 36 个任务（M2.1.1 … M5.4.2），每条带预估与 L/F/A/S/T 验收 |
 | `PyBitmessage-android/EVIDENCE.md` | 验收证据流水 | 每个任务完成/失败都追加一条，含命令输出、截图路径 |
 | `PyBitmessage-android/PLAN.md` | 方案、环境体检、CI 踩坑 | §5 本机/容器环境；**§7.5 七轮 CI 失败-修复记录** |
-| `PyBitmessage/`（代码） | 被改造的代码本体 | 分支 `android-port`；`origin` 指上游，禁止 push |
-| `PyBitmessage/.github/workflows/android-apk.yml` | CI 定义 | JDK17、CMake 3.31、p4a 缓存都在这里 |
+| `PyBitmessage/`（代码） | 被改造的代码本体 | 就是本仓库的子目录，不再是独立 clone |
+| `.github/workflows/android-apk.yml`（仓库根） | CI 定义 | 在 `PyBitmessage/` 里跑 buildozer；JDK17、CMake 3.31、p4a 缓存都在这里 |
 | `PyBitmessage/packages/android/buildozer.spec` | 打包参数 | minapi/archs/p4a.branch/权限/requirements |
 | `PyBitmessage-android/artifacts/` | 构建产物与截图 | 目录名带 run 号，如 `pybitmessage-apk-7/` ↔ run 44013702969 |
 
 **外部地址**
 
-- Fork（CI 在这里跑）：<https://github.com/k19810703/PyBitmessage> · Actions 页面：`/actions`
+- 仓库（CI 在这里跑）：<https://github.com/k19810703/pybitmessage-android> · Actions 页面：`/actions`
 - 上游（只读参考）：<https://github.com/Bitmessage/PyBitmessage>
 - 协议规范：<https://wiki.bitmessage.org/index.php/Protocol_specification>
 
@@ -98,9 +98,8 @@ M6 UI 中文化+平板    13 任务 / 6–8 天   ← 产品需求，可与 M3 �
 **当前代码状态**
 
 ```
-branch: android-port
-HEAD:   ea73b858  M2.4.4: fix daemonize on Python 3 (unbuffered text I/O)
-远端:   fork → git@github.com:k19810703/PyBitmessage.git
+branch: android-port（= 仓库默认分支）
+remote: origin → git@github.com:k19810703/pybitmessage-android.git
 ```
 
 **当前可用的东西**
@@ -126,11 +125,11 @@ python3 -m compileall -q src | grep -c "Error compiling"   # 期望 0
 # 3) 提交并推送（提交信息必须以任务号开头）
 git add -A
 git commit -m "M2.1.1: add startup env probe (python/ripemd160/pyelliptic/msgpack)"
-git push fork android-port
+git push origin android-port
 
 # 4) 等 CI 并下载产物
-gh run watch --repo k19810703/PyBitmessage
-gh run download --repo k19810703/PyBitmessage -D ../PyBitmessage-android/artifacts
+gh run watch --repo k19810703/pybitmessage-android
+gh run download --repo k19810703/pybitmessage-android -D ../PyBitmessage-android/artifacts
 
 # 5) 装机 + 验收（按 L/F/A/S/T 逐条打勾）
 ~/Documents/platform-tools/adb install -r ../PyBitmessage-android/artifacts/*/*.apk
@@ -198,11 +197,11 @@ curl -s --user user:pass -H 'Content-Type: application/json' \
 
 ```bash
 # CI 日志（全部 / 仅失败步骤）
-gh run view <run_id> --repo k19810703/PyBitmessage --log        > /tmp/ci.log
-gh run view <run_id> --repo k19810703/PyBitmessage --log-failed
+gh run view <run_id> --repo k19810703/pybitmessage-android --log        > /tmp/ci.log
+gh run view <run_id> --repo k19810703/pybitmessage-android --log-failed
 
 # 列出最近构建，按时间找到"最后一次是好的"
-gh run list --repo k19810703/PyBitmessage --limit 10
+gh run list --repo k19810703/pybitmessage-android --limit 10
 
 # 设备侧全量日志
 adb logcat -d > /tmp/device.log && grep -iE "FATAL|Traceback|Error" /tmp/device.log
@@ -260,7 +259,7 @@ git -C PyBitmessage checkout <good_commit> -- <path>  # 只回退单个文件
 - 每次推送带任务号（`M2.1.1: …`），便于 `git log` 回溯到里程碑
 - 任务完成即在 `MILESTONES.md` 勾选，并在 `EVIDENCE.md` 追加证据
 - 改动 `buildozer.spec` / workflow 后，同步更新 `PLAN.md` §7.5 的配置清单
-- 只推 `fork`，`origin` 只读
+- 只能推本仓库 `origin`（`upstream` 只读参考）
 
 **禁止**
 
@@ -276,9 +275,9 @@ git -C PyBitmessage checkout <good_commit> -- <path>  # 只回退单个文件
 
 ```bash
 # 改码 → 出包 → 装机 → 看日志（一条龙）
-cd PyBitmessage && git add -A && git commit -m "Mx.y.z: ..." && git push fork android-port \
-  && gh run watch --repo k19810703/PyBitmessage \
-  && gh run download --repo k19810703/PyBitmessage -D ../PyBitmessage-android/artifacts \
+cd PyBitmessage && git add -A && git commit -m "Mx.y.z: ..." && git push origin android-port \
+  && gh run watch --repo k19810703/pybitmessage-android \
+  && gh run download --repo k19810703/pybitmessage-android -D ../PyBitmessage-android/artifacts \
   && ~/Documents/platform-tools/adb install -r ../PyBitmessage-android/artifacts/*/*.apk
 
 # 启模拟器（arm64 / Android 13）
@@ -306,3 +305,4 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-17 | v1.4 | M2.3 完成（G2.3 通过）：真实核心在 APK 内启动；HEAD `d6e76bde` |
 | 2026-11-17 | v1.5 | M2.4 部分完成：API 打通、权限就位；记录 M2.4.5 地址创建阻塞 |
 | 2026-11-17 | v1.6 | 新增产品需求：UI 中文化 + 平板适配（M6，13 任务，6–8 天） |
+| 2026-11-17 | v2.0 | 仓库重建：不在上游 clone 上开发，改为单仓库（代码+文档），CI workflow 移到仓库根 |

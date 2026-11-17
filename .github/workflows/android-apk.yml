@@ -1,10 +1,8 @@
 name: Android APK
 
-# 说明：
-# - 本仓库自带的 .github/workflows/android.yml 被硬编码为只在非 github.com 上运行，
-#   所以在 GitHub 上不会触发；这个 workflow 是给 GitHub Actions 用的版本。
-# - 手动触发，或推送到 android-port 分支时自动构建。
-# - 产物：Actions run 页面底部的 artifact（zip 里是 *.apk）。
+# Repo layout: the PyBitmessage working tree lives in ./PyBitmessage, the docs
+# in ./PyBitmessage-android. GitHub only reads workflows from the repo root,
+# so this file drives the build and runs buildozer inside ./PyBitmessage.
 
 on:
   workflow_dispatch:
@@ -12,8 +10,8 @@ on:
     branches: [android-port]
     paths:
       - '.github/workflows/android-apk.yml'
-      - 'packages/android/buildozer.spec'
-      - 'src/**'
+      - 'PyBitmessage/packages/android/buildozer.spec'
+      - 'PyBitmessage/src/**'
 
 concurrency:
   group: android-apk-${{ github.ref }}
@@ -29,13 +27,15 @@ jobs:
     name: buildozer android debug
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: PyBitmessage
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ubuntu-latest 镜像默认 JDK 已是 25，Gradle 8.14 只认到 24，
-      # 会报 "Unsupported class file major version 69"。必须显式钉 17。
+      # ubuntu-latest 默认 JDK 25，Gradle 8.14 只认到 24
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -56,15 +56,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      # p4a v2024.01.21 的 jpeg recipe 用 libjpeg-turbo 2.0.1，其 CMakeLists 仍是
-      # cmake_minimum_required(VERSION 2.8.12)；runner 自带的 CMake 4.x 已移除 <3.5 兼容，
-      # 会报 "Compatibility with CMake < 3.5 has been removed"。这里钉回 3.31。
+      # p4a v2024.01.21 的 jpeg recipe 用 libjpeg-turbo 2.0.1（cmake_minimum_required 2.8.12）
+      # runner 的 CMake 4.x 已移除 <3.5 兼容
       - name: Pin CMake 3.31
         run: |
           python -m pip install 'cmake==3.31.6'
           sudo ln -sf "$(command -v cmake)" /usr/local/bin/cmake
           cmake --version | head -1
-
 
       - name: Install buildozer
         run: |
@@ -80,18 +78,16 @@ jobs:
           cp -r src/bitmessagekivy src/backend src/mockbm src/images src/pybitmessage
           ls src/pybitmessage | head -20
 
-      # Android SDK / NDK / p4a 源码都在 ~/.buildozer 里，缓存它可以把首次的 ~8 分钟下载省掉。
-      # 用 restore + save 拆分，保证构建失败时也能存下已下载的 SDK/NDK。
       - name: Restore p4a toolchain cache
         uses: actions/cache/restore@v4
         with:
           path: ~/.buildozer
-          key: p4a-v2-${{ runner.os }}-${{ hashFiles('packages/android/buildozer.spec') }}
+          key: p4a-v3-${{ runner.os }}-${{ hashFiles('PyBitmessage/packages/android/buildozer.spec') }}
           restore-keys: |
-            p4a-v2-${{ runner.os }}-
+            p4a-v3-${{ runner.os }}-
 
       - name: Build debug APK
-        working-directory: packages/android
+        working-directory: PyBitmessage/packages/android
         run: |
           set -o pipefail
           mkdir -p ~/.gradle
@@ -104,14 +100,12 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/.buildozer
-          key: p4a-v2-${{ runner.os }}-${{ hashFiles('packages/android/buildozer.spec') }}
+          key: p4a-v3-${{ runner.os }}-${{ hashFiles('PyBitmessage/packages/android/buildozer.spec') }}
 
       - name: Show artifacts and tail log
         if: always()
         run: |
-          echo '--- bin ---'
           ls -lh packages/android/bin/ || true
-          echo '--- tail build.log ---'
           tail -80 packages/android/build.log || true
 
       - name: Upload APK
@@ -119,6 +113,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pybitmessage-apk-${{ github.run_number }}
-          path: packages/android/bin/*.apk
+          path: PyBitmessage/packages/android/bin/*.apk
           if-no-files-found: error
           retention-days: 14
