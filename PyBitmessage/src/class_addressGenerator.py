@@ -38,6 +38,8 @@ class addressGenerator(StoppableThread):
             nonceTrialsPerByte, payloadLengthExtraBytes
     ):
         """Write essential address config values and reload cryptors"""
+        if isinstance(label, bytes):
+            label = label.decode('utf-8', 'replace')
         address = encodeAddress(version, stream, ripe)
         try:
             config.add_section(address)

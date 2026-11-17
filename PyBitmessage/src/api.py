@@ -493,6 +493,20 @@ class BMRPCDispatcher(object):
                 % (e, text)
             )
 
+    @classmethod
+    def _decode_text(cls, text, decode_type='base64'):
+        """Decode and return text, not bytes.
+
+        ``_decode`` returns bytes (correct for keys/hashes) but labels end up in
+        keys.dat via config.set(), which on Python 3 rejects bytes with
+        "option values must be strings".
+        """
+        raw = cls._decode(text, decode_type)
+        try:
+            return raw.decode('utf-8')
+        except UnicodeDecodeError:
+            raise APIError(17, 'Value is not valid UTF-8 data.')
+
     def _verifyAddress(self, address):
         status, addressVersionNumber, streamNumber, ripe = \
             decodeAddress(address)
@@ -576,7 +590,7 @@ class BMRPCDispatcher(object):
         return {'addresses': data}
 
     def _blackwhitelist_add(self, address, label, kind='black'):
-        label = self._decode(label, "base64")
+        label = self._decode_text(label, "base64")
         address = addBMIfNotPresent(address)
         self._verifyAddress(address)
         queryreturn = sqlQuery(
@@ -651,7 +665,7 @@ class BMRPCDispatcher(object):
     @command('addAddressBookEntry', 'legacy:addAddressbook')
     def HandleAddAddressBookEntry(self, address, label):
         """Add an entry to address book. label must be base64 encoded."""
-        label = self._decode(label, "base64")
+        label = self._decode_text(label, "base64")
         address = addBMIfNotPresent(address)
         self._verifyAddress(address)
         # TODO: add unique together constraint in the table
@@ -761,11 +775,7 @@ class BMRPCDispatcher(object):
             raise APIError(
                 23, 'Bool expected in eighteenByteRipe, saw %s instead'
                 % type(eighteenByteRipe))
-        label = self._decode(label, "base64")
-        try:
-            label.decode('utf-8')
-        except UnicodeDecodeError:
-            raise APIError(17, 'Label is not valid UTF-8 data.')
+        label = self._decode_text(label, "base64")
         queues.apiAddressGeneratorReturnQueue.queue.clear()
         # FIXME hard coded stream no
         streamNumberForAddress = 1

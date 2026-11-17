@@ -46,6 +46,21 @@
 | M2.5.2 INTERNET 权限 | ✅ | `aapt2 dump badging` 有 `android.permission.INTERNET` / `ACCESS_NETWORK_STATE`（commit `c9b49ada`） |
 | M2.7.1 API 可用 | ✅ | 设备上 `clientStatus` 返回正常 XML（networkConnections / networkStatus / softwareVersion） |
 | **G2.4** | ⏸ 未通过 | 等待 M2.4.5 |
+| M2.4.5b | 2026-11-17 | 定位地址生成线程崩溃 | ✅ 找到根因 | 设备日志（instrumented build，run 44080731890）：`AGENDA: addressGenerator thread started` → `AGENDA: got request 'createRandomAddress'` → `THREAD-CRASH addressGenerator: TypeError("'>' not supported between instances of 'int' and 'str'")` | `config.get()` 在 py3 返回 **str**，生成器里 `max(str, int)` 直接抛异常；py2 允许异类比较所以上游从未暴露 |
+
+#### M2.4.5b 根因与修复
+
+```python
+# 之前（api.py）
+nonceTrialsPerByte = self.config.get('bitmessagesettings', 'defaultnoncetrialsperbyte')  # → str "1000"
+# 之后（class_addressGenerator.py）
+nonceTrialsPerByte = max(nonceTrialsPerByte, defaults.networkDefaultProofOfWorkNonceTrialsPerByte)
+#                                                            ^^^ int → TypeError
+```
+
+修复：`api.py` 两个 handler 改用 `config.getint()`；`class_addressGenerator` 对进队列的两个难度值做 `int()` 兜底。commit `5c40095`。
+
+**方法论收获**：之前"API 挂起"被误判为"线程没起来"，实际是线程起来后**在异常中静默死亡**。`threading.excepthook`（`src/main.py`）与生成器里的 `AGENDA:` 打印把这一层变成可见，这组观测点保留在代码里。
 
 ### 1.7 M2.4 期间新发现的 4 个 py3/Android 问题（均已修）
 

@@ -57,6 +57,10 @@ def decode(string, base):
     """Returns the decoded string"""
     code_string = get_code_string(base)
     result = 0
+    if isinstance(string, str):
+        # code_string is bytes; indexing a str yields str, and bytes.find()
+        # rejects str on Python 3 ("argument should be integer or bytes-like")
+        string = string.encode('latin-1')
     if base == 16:
         string = string.lower()
     while string:
