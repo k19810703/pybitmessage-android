@@ -15,8 +15,29 @@ UI tests). Ordering matters:
 """
 
 import os
+import threading
+import traceback
 
 from envprobe import run as probe_environment  # noqa: E402
+
+
+def _install_thread_excepthook():
+    """Make daemon-thread crashes visible in logcat.
+
+    Python kills a thread on an unhandled exception and only prints a one-line
+    'Exception in thread ...' to stderr; several of those lines were missed
+    while debugging, so route them through an explicit hook.
+    """
+    def hook(args):
+        name = getattr(args.thread, 'name', '?')
+        print('THREAD-CRASH %s: %r' % (name, args.exc_value), flush=True)
+        traceback.print_exception(
+            args.exc_type, args.exc_value, args.exc_traceback)
+
+    threading.excepthook = hook
+
+
+_install_thread_excepthook()
 
 probe_environment()
 

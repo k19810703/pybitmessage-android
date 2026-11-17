@@ -773,7 +773,12 @@ class BMRPCDispatcher(object):
             'createRandomAddress', 4, streamNumberForAddress, label, 1, "",
             eighteenByteRipe, nonceTrialsPerByte, payloadLengthExtraBytes
         ))
-        return queues.apiAddressGeneratorReturnQueue.get()
+        try:
+            return queues.apiAddressGeneratorReturnQueue.get(timeout=90)
+        except queues.queue.Empty:
+            raise APIError(
+                21, 'Address generation timed out; the addressGenerator '
+                    'thread did not answer within 90s.')
 
     @command('createDeterministicAddresses')
     def HandleCreateDeterministicAddresses(

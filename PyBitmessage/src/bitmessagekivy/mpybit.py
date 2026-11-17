@@ -128,7 +128,11 @@ class NavigateApp(MDApp):
 
     def set_screen(self, screen_name):
         """Set the screen name when navigate to other screens"""
-        self.root.ids.scr_mngr.current = screen_name
+        manager = self.root.ids.scr_mngr
+        print(
+            'SETSCREEN: %r available=%r' % (
+                screen_name, manager.screen_names), flush=True)
+        manager.current = screen_name
 
     def run(self):
         """Running the widgets"""

@@ -92,9 +92,12 @@ class addressGenerator(StoppableThread):
         """
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         # pylint: disable=too-many-nested-blocks
+        print('AGENDA: addressGenerator thread started', flush=True)
 
         while state.shutdown == 0:
             queueValue = queues.addressGeneratorQueue.get()
+            print(
+                'AGENDA: got request %r' % (queueValue[0],), flush=True)
             nonceTrialsPerByte = 0
             payloadLengthExtraBytes = 0
             live = True
@@ -211,6 +214,7 @@ class addressGenerator(StoppableThread):
                 # The API and the join and create Chan functionality
                 # both need information back from the address generator.
                 queues.apiAddressGeneratorReturnQueue.put(address)
+                print('AGENDA: address returned to caller', flush=True)
 
                 queues.UISignalQueue.put((
                     'updateStatusBar',
