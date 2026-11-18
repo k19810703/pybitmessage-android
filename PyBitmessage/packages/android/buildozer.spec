@@ -1,10 +1,10 @@
 [app]
 
 # (str) Title of your application
-title = PyBitmessage Mock
+title = PyBitmessage
 
 # (str) Package name
-package.name = pybitmessagemock
+package.name = pybitmessage
 
 # (str) Package domain (needed for android/ios packaging)
 package.domain = at.bitmessage

@@ -10,6 +10,7 @@ Bitmessage android(mobile) interface
 import logging
 import os
 import sys
+import time
 from functools import partial
 
 from kivy.clock import Clock
@@ -42,8 +43,7 @@ from pybitmessage.bitmessagekivy.kivy_state import KivyStateVariables
 from pybitmessage.bitmessagekivy.load_kivy_screens_data import load_screen_json
 from pybitmessage.bitmessagekivy.uikivysignaler import UIkivySignaler
 from pybitmessage.bmconfigparser import config  # noqa: F401
-from pybitmessage.mockbm.helper_startup import (
-    loadConfig, total_encrypted_messages_per_month)
+from pybitmessage.helper_startup import loadConfig
 
 logger = logging.getLogger('default')
 
@@ -92,6 +92,18 @@ class IdentitySpinner(BaseIdentitySpinner):
     """Identity Dropdown in Side Navigation bar"""
 
 
+def _messages_last_month():
+    """Count inbox messages received in the last 30 days (real data)."""
+    try:
+        from pybitmessage.helper_sql import sqlQuery
+        since = int(time.time()) - 30 * 24 * 3600
+        rows = sqlQuery(
+            'SELECT COUNT(*) FROM inbox WHERE received >= ?', since)
+        return int(rows[0][0]) if rows else 0
+    except Exception:  # noqa: BLE001 - a dashboard counter must not crash
+        return 0
+
+
 class NavigateApp(MDApp):
     """Navigation Layout of class"""
 
@@ -100,7 +112,7 @@ class NavigateApp(MDApp):
     identity_list = get_identity_list()
     image_path = load_image_path()
     app_platform = platform
-    encrypted_messages_per_month = total_encrypted_messages_per_month()
+    encrypted_messages_per_month = _messages_last_month()
     tr = Lang("en")  # for changing in franch replace en with fr
 
     def __init__(self):

@@ -66,6 +66,40 @@ def prepare_home():
     return target
 
 
+CORE_MODULES = (
+    'state', 'bmconfigparser', 'helper_sql', 'helper_startup', 'defaults',
+    'queues', 'shared', 'addresses', 'protocol', 'inventory', 'debug',
+    'l10n', 'network', 'storage', 'singleinstance', 'shutdown',
+)
+
+
+def alias_core_modules():
+    """Bind the flattened ``pybitmessage.*`` names to the real modules.
+
+    The APK ships a copy of every top-level ``*.py`` inside ``pybitmessage/``
+    (buildozer needs that layout for the Kivy imports), which would otherwise
+    give the UI a *second* ``state``/``config`` instance. Aliasing keeps one
+    object per module, so things like ``networkConnections`` are shared.
+    """
+    import importlib
+    import sys
+
+    try:
+        package = importlib.import_module('pybitmessage')
+    except ImportError:
+        return
+    for name in CORE_MODULES:
+        try:
+            module = importlib.import_module(name)
+        except ImportError:
+            continue
+        sys.modules['pybitmessage.' + name] = module
+        setattr(package, name, module)
+    import state as _state
+    print('ALIAS pybitmessage.state is state: %s' % (
+        sys.modules.get('pybitmessage.state') is _state), flush=True)
+
+
 def main():
     """Start the core with the Kivy user interface."""
     prepare_home()
@@ -87,6 +121,7 @@ def main():
     # Plaintext peer links are allowed by the protocol; messages stay E2E
     # encrypted. Re-enable once the certs are generated at build time.
     state.disable_tls = True
+    alias_core_modules()
     bitmessagemain.main()
 
 
