@@ -231,8 +231,10 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 ### M3.4 发送管道（2 天）
 
-> **进展（2026-11-18）**：发送管道修掉 6 处 str/bytes 拼接后，状态从 `doingpubkeypow` 推进到 `awaitingpubkey`；
-> 卡点转为 pubkey 交换（宿主未回 pubkey），见 `EVIDENCE.md` §1.14。
+> **进展（2026-11-18 12:10）**：发送管道已通到"广播 inv"（PoW 在模拟器上约 2.5 分钟/条）；
+> 卡点是 **pubkey 交换**：App 发了 getpubkey，宿主没回 pubkey。
+> 已定位到宿主侧存在**模块重复导入**（日志被 `Using default logger configuration` 刷屏），
+> 两份 `shared`/`state` 会让 tag 匹配落空。见 `EVIDENCE.md` §1.15、§1.16。
 
 | ID | 任务 | 预估 | 验收标准 |
 |---|---|---|---|

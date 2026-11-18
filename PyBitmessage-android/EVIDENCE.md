@@ -273,6 +273,33 @@ ImportError: cannot import name 'sem_unlink' from '_multiprocessing'
 
 **结论**：M3 还差 pubkey 交换这一段。下一步在宿主 `objectProcessor` 打点，确认 getpubkey 的 tag 匹配分支。
 
+### 1.16 M3 续：定位到"模块被重复导入"，但 pubkey 交换仍未打通（2026-11-18 12:10）
+
+**本轮修好的**
+
+| 修复 | 说明 |
+|---|---|
+| PoW 回退 | `_doFastPoW` 在 Android 上因 `_multiprocessing` 缺 `sem_unlink` 必失败 → 回退 `_doSafePoW`（模拟器上约 **2.5 分钟**一条消息） |
+| 日志级别 | `BITMESSAGE_LOG_LEVEL` 环境变量生效，设备上能看到 DEBUG |
+| 宿主模块别名 | `/tmp/run_node.py` 里把核心模块别名进 `pybitmessage.*` |
+
+**新发现（重要）**：宿主日志被
+`Using default logger configuration` + `Imported message type module ...` 刷屏——
+说明 **`debug` 模块被反复导入**（每个对象一次）。这不是日志噪音，而是**模块被加载了两份**
+（`pybitmessage.*` 与顶层名各一份）的典型症状；两份 `shared`/`state` 会让地址 tag 匹配落空，
+与"App 广播 getpubkey 但宿主不回 pubkey"的现象吻合。
+
+**当前证据链**
+
+```
+App : Safe PoW done → Found proof of work → sending inv (for the getpubkey message)   12:05:34
+Host: 只看到自己的 InvBroadcaster，没有收到该 inv
+```
+
+**下一步（M3.3）**
+1. 彻底消除重复模块：让宿主也走 `src/main.py` 的 `alias_core_modules()`（或统一为包内相对导入）
+2. 在宿主 `bm_command_inv` / `objectProcessor.processgetpubkey` 打点，确认 inv 是否到达、tag 是否命中
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
