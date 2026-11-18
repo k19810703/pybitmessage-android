@@ -245,6 +245,13 @@ class Main(object):
                 import bitmessagecurses
                 bitmessagecurses.runwrapper()
             elif state.kivy:
+                # The Qt client clears 'dontconnect' from its network menu;
+                # the Kivy UI has no such switch, so a first run (which writes
+                # dontconnect=true) would never open a single peer connection.
+                if config.has_option(
+                        'bitmessagesettings', 'dontconnect'):
+                    config.remove_option('bitmessagesettings', 'dontconnect')
+                    config.save()
                 print('Running with kivy')
                 from bitmessagekivy.mpybit import NavigateApp
                 state.kivyapp = NavigateApp()

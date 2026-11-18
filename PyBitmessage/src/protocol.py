@@ -434,6 +434,11 @@ def assembleErrorMessage(fatal=0, banTime=0, inventoryVector='', errorText=''):
     Construct the payload of an error message,
     return the resulting bytes of running `CreatePacket` on it
     """
+    # callers pass human readable text; the wire format is bytes
+    if isinstance(inventoryVector, str):
+        inventoryVector = inventoryVector.encode('utf-8')
+    if isinstance(errorText, str):
+        errorText = errorText.encode('utf-8')
     payload = encodeVarint(fatal)
     payload += encodeVarint(banTime)
     payload += encodeVarint(len(inventoryVector))

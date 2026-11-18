@@ -42,6 +42,7 @@ _install_thread_excepthook()
 probe_environment()
 
 
+
 def prepare_home():
     """Point BITMESSAGE_HOME at a writable app-private directory."""
     if os.environ.get('BITMESSAGE_HOME'):
@@ -69,8 +70,15 @@ def main():
     """Start the core with the Kivy user interface."""
     prepare_home()
 
+    import logging
+
     import state
     import bitmessagemain
+
+    # Diagnostic switch; must run after debug.py configured logging.
+    if os.environ.get('BITMESSAGE_LOG_DEBUG'):
+        logging.getLogger('default').setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
 
     state.kivy = True
     bitmessagemain.main()
