@@ -176,6 +176,9 @@ class TCPConnection(BMProto, TLSDispatcher):
         (version/verack exchange, and if both side support TLS,
         the TLS handshake as well).
         """
+        print('TCP established: %s:%s outbound=%s' % (
+            self.destination.host, self.destination.port, self.isOutbound),
+            flush=True)
         self.set_connection_fully_established()
         self.set_state("bm_header")
         self.bm_proto_reset()

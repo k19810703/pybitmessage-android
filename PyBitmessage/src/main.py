@@ -81,6 +81,12 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     state.kivy = True
+    # The APK does not ship src/sslkeys (the shared self-signed node certs are
+    # excluded from the repo), so a TLS handshake with peers that advertise
+    # NODE_SSL would fail before the connection is ever marked established.
+    # Plaintext peer links are allowed by the protocol; messages stay E2E
+    # encrypted. Re-enable once the certs are generated at build time.
+    state.disable_tls = True
     bitmessagemain.main()
 
 

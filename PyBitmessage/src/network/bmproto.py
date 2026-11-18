@@ -133,6 +133,8 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
                 'Received command %s before connection was fully'
                 ' established, ignoring', self.command)
             self.invalid = True
+        print('BMPROTO recv %s established=%s' % (
+            self.command, self.fullyEstablished), flush=True)
         if not self.invalid:
             try:
                 retval = getattr(
@@ -545,9 +547,13 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
         to the main connection phase. If not sent verack yet,
         continue processing.
         """
+        print('BMPROTO verack received (verackSent=%s)' % self.verackSent,
+              flush=True)
         self.verackReceived = True
         if not self.verackSent:
             return True
+        print('BMPROTO verack -> established (isSSL=%s)' % self.isSSL,
+              flush=True)
         self.set_state(
             "tls_init" if self.isSSL else "connection_fully_established",
             length=self.payloadLength, expectBytes=0)
@@ -574,7 +580,11 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
             self.destination.host, self.peerNode.port)
         logger.debug('user agent: %s', self.userAgent)
         logger.debug('streams: [%s]', ','.join(map(str, self.streams)))
+        print('BMPROTO version parsed: ver=%s streams=%r timeOffset=%s' % (
+            self.remoteProtocolVersion, self.streams, self.timeOffset),
+            flush=True)
         if not self.peerValidityChecks():
+            print('BMPROTO version REJECTED by peerValidityChecks', flush=True)
             # ABORT afterwards
             return True
         self.append_write_buf(protocol.CreatePacket('verack'))
@@ -592,7 +602,8 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
                 '%(host)s:%(port)i sending version',
                 self.destination._asdict())
         if ((self.services & protocol.NODE_SSL == protocol.NODE_SSL)
-           and protocol.haveSSL(not self.isOutbound)):
+           and protocol.haveSSL(not self.isOutbound)
+           and not getattr(state, 'disable_tls', False)):
             self.isSSL = True
         if not self.verackReceived:
             return True
