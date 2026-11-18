@@ -45,7 +45,7 @@ def calculateTestnetAddressFromPubkey(pubkey):
     sha = hashlib.new('sha256')
     sha.update(pubkey)
     ripe.update(sha.digest())
-    ripeWithProdnetPrefix = '\x6F' + ripe.digest()
+    ripeWithProdnetPrefix = b'\x6F' + ripe.digest()
 
     checksum = hashlib.sha256(hashlib.sha256(
         ripeWithProdnetPrefix).digest()).digest()[:4]

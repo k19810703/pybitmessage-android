@@ -1057,8 +1057,8 @@ class objectProcessor(threading.Thread):
         if checksum != hashlib.sha512(payload).digest()[0:4]:
             logger.info('ackdata checksum wrong. Not sending ackdata.')
             return False
-        command = command.rstrip('\x00')
-        if command != 'object':
+        command = command.rstrip(b'\x00')
+        if command != b'object':
             return False
         return True
 
