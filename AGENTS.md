@@ -11,7 +11,7 @@
 | 项 | 值 |
 |---|---|
 | 目标 | 一个 APK，装了的设备互相能发加密消息（无自建服务器，不上架） |
-| 当前阶段 | **M2.4 完成（G2.4 ✅，地址 3.7s 生成）；下一任务 = M2.6 / M2.7（联网）** |
+| 当前阶段 | **M2.4 完成（G2.4 ✅）；M2.7 联网进行中：TCP 已通、version 握手成功，`fullyEstablished` 仍为 0** |
 | 已完成 | M1 构建链路；M2.1 能力探测（**G2.1**）；M2.2 Python 3 解禁（**G2.2**）；M2.3 真实核心启动（**G2.3**：APK 起来后跑的是真核心，已建库、显示真实引导页） |
 | 仓库 | **<https://github.com/k19810703/pybitmessage-android>**（public，默认分支 `android-port`） |
 | 仓库结构 | `PyBitmessage/`（代码）/ `PyBitmessage-android/`（文档）/ `artifacts/`（gitignore） |
@@ -109,7 +109,7 @@ remote: origin → git@github.com:k19810703/pybitmessage-android.git
 - 能装机：模拟器 `Pixel_6_API_33`（arm64-v8a / Android 13）
 - 已有：`INTERNET` 权限、本地 API 可用（`clientStatus` 正常）
 - 已有：真实地址 `BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD`（生成 3.7s，重启不丢）
-- 仍缺：**网络连接数还是 0**（`dontconnect=true` 首启默认）→ M2.6 / M2.7
+- 联网：TCP 可连活种子、`version` 握手成功（userAgent 可见），但 `fullyEstablished=0` → M2.7 继续
 
 ---
 
@@ -267,6 +267,8 @@ adb shell am force-stop $PKG && adb shell am start -n $PKG/org.kivy.android.Pyth
 | 构建报 `class file major 69` | JDK 版本错（应 17） | 检查 workflow `setup-java` |
 | 构建报 `Compatibility with CMake < 3.5` | CMake 4.x | 检查 `Pin CMake 3.31` 步骤 |
 | 构建报 `unordered_map` | numpy 2.x 与 NDK r25b | 检查 requirements 是否又引入 opencv/pyzbar |
+| 对端回 `Your time is too far in the past` | 模拟器时钟漂移（宿主休眠后差几小时） | `adb root && adb shell "date -s @$(date +%s)"` |
+| 所有节点都连不上 | 默认 knownnodes（2017 年）已全部下线 | 用 `dig bootstrap8444.bitmessage.org` 的活 IP 覆盖 `knownnodes.dat` |
 
 ---
 
@@ -326,3 +328,4 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-17 | v2.0 | 仓库重建：不在上游 clone 上开发，改为单仓库（代码+文档），CI workflow 移到仓库根 |
 | 2026-11-17 | v2.1 | M2.4.5 代码修复完成（本地验证）；设备复验被网络阻塞 |
 | 2026-11-18 | v2.2 | M2.4 完成：G2.4 通过、A1 达成（3.7s）；新增热补丁调试法 §6.7 |
+| 2026-11-18 | v2.3 | M2.7 进展：dontconnect/时钟/assembleErrorMessage 三坑已修；握手到 version，未 fullyEstablished |

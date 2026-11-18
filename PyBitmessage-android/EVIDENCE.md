@@ -136,6 +136,30 @@ python3 -c "…createRandomAddress…"   # 期望 90s 内返回 BM-2...
 
 影响：没有地址 → G2.4 / M3.1（地址展示）/ M3.3（公钥）/ 全部 M3 都无法开始，**这是当前唯一的硬阻塞**。
 
+### 1.10 M2.7 · 联网（A2）进展与新的 3 个坑（2026-11-18 09:00）
+
+| # | 现象 | 根因 | 修复 |
+|---|---|---|---|
+| 1 | `networkConnections` 恒为 0，`connectionpool.loop()` 从不发起连接 | 首启写入 `dontconnect=true`，只有 Qt 客户端的网络菜单会清除它；Kivy 分支没有 | `bitmessagemain.py` 的 kivy 分支清除并 `config.save()`（commit `c9c5924`） |
+| 2 | 对端回 `Your time is too far in the past compared to mine.` | 模拟器时钟落后 **32,186 秒（约 9 小时）**（宿主休眠导致） | `adb root && adb shell "date -s @$(date +%s)"` |
+| 3 | 报告错误时自己先崩：`TypeError: can't concat str to bytes` | `protocol.assembleErrorMessage()` 把 str 直接拼到 bytes 上（`inventoryVector`、`errorText`） | 两个字段先 `.encode('utf-8')`（commit `c9c5924`） |
+
+**修复后的进展**：把 `knownnodes.dat` 收敛成两个活着的种子节点
+
+```
+194.164.163.84:8444   userAgent=/PyBitmessage:0.6.3.2/   fullyEstablished=0
+85.114.135.102:8444   userAgent=/PyBitmessage:0.6.3.2/   fullyEstablished=0
+```
+
+- ✅ TCP 能连、`version` 握手成功（对端 userAgent 已拿到）
+- ❌ `fullyEstablished` 仍为 0 → `verack` 之后的阶段没走完（下一步查 `bm_command_verack` / `connection_fully_established` 状态机，以及是否误入 TLS 分支）
+
+**顺带确认的环境事实**
+
+- 模拟器出网正常（`ping 8.8.8.8` 0% 丢包，`nc` 可连种子节点 8444）
+- 默认 knownnodes（2017 年那批 IP）**全部已下线**，必须用 `bootstrap8444.bitmessage.org` 解析出的活节点
+- 日志级别默认 WARNING，排查网络要看 `BITMESSAGE_LOG_DEBUG=1`（`src/main.py` 已加开关）
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。

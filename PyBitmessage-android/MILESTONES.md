@@ -180,6 +180,11 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 ### M2.7 P2P 联网验证（1 天）
 
+> **进度（2026-11-18）**：三个阻塞已修（`dontconnect` 未清、模拟器时钟漂移、`assembleErrorMessage` 拼接 str）
+> → TCP 连上活种子并完成 `version` 交换（`userAgent=/PyBitmessage:0.6.3.2/`），但 `fullyEstablished=0`。
+> 下一步：查 `bm_command_verack` → `connection_fully_established` 状态机，以及是否误入 TLS 分支。
+> 另注：默认 knownnodes 全部下线，需用 `bootstrap8444.bitmessage.org` 解析出的活节点（194.164.163.84 / 85.114.135.102）。
+
 | ID | 任务 | 改动 | 预估 | 验收标准 |
 |---|---|---|---|---|
 | M2.7.1 | 打开 API 便于自动化验收 | `keys.dat` 里 `apienabled=true`、`apivariant=json`、apiuser/pass | 1h | **A**：`adb forward tcp:8442 tcp:8442` 后 `curl` 能拿到 `clientStatus` |
