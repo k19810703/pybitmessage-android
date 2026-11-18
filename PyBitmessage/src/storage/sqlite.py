@@ -95,9 +95,14 @@ class SqliteInventory(InventoryStorage):
             t = int(time.time())
             hashes = [x for x, value in self._inventory.items()
                       if value.stream == stream and value.expires > t]
-            hashes += (str(payload) for payload, in sqlQuery(
-                'SELECT hash FROM inventory WHERE streamnumber=?'
-                ' AND expirestime>?', stream, t))
+            # the hash column is a BLOB; str(bytes) would turn the key into
+            # "b'...'", which never matches state.Inventory or the wire format
+            hashes += (
+                bytes(payload) if isinstance(payload, (bytes, bytearray))
+                else str(payload).encode('latin-1', 'replace')
+                for payload, in sqlQuery(
+                    'SELECT hash FROM inventory WHERE streamnumber=?'
+                    ' AND expirestime>?', stream, t))
             return hashes
 
     def flush(self):
