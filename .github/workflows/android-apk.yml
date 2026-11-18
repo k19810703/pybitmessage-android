@@ -56,16 +56,28 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Keep one debug signing key across builds, otherwise every APK has a
-      # different signature and `adb install -r` fails with
-      # INSTALL_FAILED_UPDATE_INCOMPATIBLE (users would have to uninstall and
-      # lose their data). actions/cache never overwrites an existing key, so
-      # the first run creates the keystore and later runs reuse it.
-      - name: Cache debug keystore
+      # Keep ONE signing key across builds. p4a generates a fresh debug
+      # keystore on every runner, so consecutive APKs have different
+      # signatures and `adb install -r` fails with
+      # INSTALL_FAILED_UPDATE_INCOMPATIBLE (users must uninstall and lose
+      # their data). We cache our own keystore and re-sign the APK below.
+      # NOTE: this is a demo/self-signed key, not a security boundary.
+      - name: Cache signing keystore
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: android-debug-keystore-v1
+          path: ~/.pybitmessage-sign
+          key: pybitmessage-signing-v1
+
+      - name: Ensure signing keystore
+        run: |
+          mkdir -p ~/.pybitmessage-sign
+          if [ ! -f ~/.pybitmessage-sign/release.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore ~/.pybitmessage-sign/release.keystore \
+              -alias pybitmessage -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass pybitmessage -keypass pybitmessage \
+              -dname "CN=PyBitmessage Android, O=PyBitmessage, C=CN"
+          fi
 
       # p4a v2024.01.21 的 jpeg recipe 用 libjpeg-turbo 2.0.1（cmake_minimum_required 2.8.12）
       # runner 的 CMake 4.x 已移除 <3.5 兼容
@@ -118,6 +130,24 @@ jobs:
         run: |
           ls -lh packages/android/bin/ || true
           tail -80 packages/android/build.log || true
+
+      # Re-sign with the cached key so every build upgrades in place.
+      - name: Re-sign APK with the stable key
+        working-directory: PyBitmessage
+        run: |
+          set -euo pipefail
+          APK=$(ls packages/android/bin/*.apk | head -1)
+          echo "signing $APK"
+          ZIPALIGN=$(find "$HOME/.buildozer" -name zipalign -type f | head -1)
+          APKSIGNER=$(find "$HOME/.buildozer" -name apksigner -type f | head -1)
+          echo "zipalign=$ZIPALIGN"; echo "apksigner=$APKSIGNER"
+          "$ZIPALIGN" -f -p 4 "$APK" /tmp/aligned.apk
+          "$APKSIGNER" sign \
+            --ks "$HOME/.pybitmessage-sign/release.keystore" \
+            --ks-pass pass:pybitmessage --key-pass pass:pybitmessage \
+            --out /tmp/signed.apk /tmp/aligned.apk
+          mv /tmp/signed.apk "$APK"
+          "$APKSIGNER" verify --print-certs "$APK" | head -4
 
       - name: Upload APK
         if: success()
