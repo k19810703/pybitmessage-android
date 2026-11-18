@@ -231,9 +231,12 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 ### M3.4 发送管道（2 天）
 
+> **进展（2026-11-18）**：发送管道修掉 6 处 str/bytes 拼接后，状态从 `doingpubkeypow` 推进到 `awaitingpubkey`；
+> 卡点转为 pubkey 交换（宿主未回 pubkey），见 `EVIDENCE.md` §1.14。
+
 | ID | 任务 | 预估 | 验收标准 |
 |---|---|---|---|
-| M3.4.1 | 组包 + 签名（消息编码 SIMPLE） | 4h | 单元级：本地构造的对象能被 `decodeObjectParameters` 正确解析 |
+| M3.4.1 🟡 | 组包 + 签名（消息编码 SIMPLE） | 4h | 单元级：本地构造的对象能被 `decodeObjectParameters` 正确解析 |
 | M3.4.2 | PoW 计算与进度反馈 | 4h | **L**：`Found proof of work`；**S**：界面显示"计算中→已发送"；**T**：< 120 秒 |
 | M3.4.3 | 入队广播（inv 通告） | 4h | **A**：发送后 `numberOfMessagesProcessed` 或 sent 列表 +1 |
 

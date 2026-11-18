@@ -226,6 +226,27 @@ FATAL EXCEPTION 计数 = 0
 **关键修复**：APK 里 `pybitmessage/` 是所有顶层模块的副本，Kivy 的 `from pybitmessage import state` 会拿到**第二份** state/config。
 `main.py` 现在把核心模块别名进 `pybitmessage.*`（`sys.modules` + 包属性），UI 与核心共用同一对象。
 
+### 1.14 M3 进展：发送管道打通到 PoW，卡在 pubkey 交换（2026-11-18 10:50）
+
+**已建立测试环境**：宿主节点（`/tmp/run_node.py`，禁用 TLS）拿到地址 `BM-2cVWvLvfwmeRafTsw93bof2gFSGD8HfUBp`，
+模拟器 App 有 `BM-2cWwkgY93Kqn9DTi8ftFZtEXrUT3W99sqB`，两者 `fullyEstablished` 互联。
+
+**修复 1（关键）**：`class_singleWorker` 里 6 处把 **str** 字面量拼到 bytes 载荷上（pubkey/broadcast/msg/getpubkey）：
+
+```
+File "class_singleWorker.py", line 1407, in requestPubKey
+    payload += '\x00\x00\x00\x00'
+TypeError: can't concat str to bytes
+```
+
+被裸 `except:` 吞掉，只留一行 `sendMsg didn't work`。改为 `b'...'`，并把 worker 的 10 处裸 except 改成 `logger.exception(...)`（带 traceback）。
+
+**状态推进**：`doingpubkeypow` → **`awaitingpubkey`**（PoW 完成，getpubkey 已发出）。
+
+**当前卡点**：对端没有回 pubkey。宿主与 App 的 TCP 连接是 established，但宿主侧没有看到对象处理日志
+（`debug.py` 的日志级别覆盖了运行时 `setLevel(DEBUG)`，需要给日志装置单独设级别）。
+下一步：在宿主的 `objectProcessor` 里打点，确认 getpubkey 对象是否到达、tag 是否匹配。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
