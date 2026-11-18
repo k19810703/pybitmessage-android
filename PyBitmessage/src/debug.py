@@ -51,7 +51,9 @@ helper_startup.loadConfig()
 # logging.config.fileConfig interface
 # examples are here:
 # https://web.archive.org/web/20170712122006/https://bitmessage.org/forum/index.php/topic,4820.msg11163.html#msg11163
-log_level = 'WARNING'
+# BITMESSAGE_LOG_LEVEL=DEBUG (or INFO) makes the core chatty without
+# having to craft a logging.dat; useful on devices.
+log_level = os.environ.get('BITMESSAGE_LOG_LEVEL', 'WARNING').upper()
 
 
 def log_uncaught_exceptions(ex_cls, ex, tb):
