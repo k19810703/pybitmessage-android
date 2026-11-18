@@ -154,6 +154,30 @@ python3 -c "…createRandomAddress…"   # 期望 90s 内返回 BM-2...
 - ✅ TCP 能连、`version` 握手成功（对端 userAgent 已拿到）
 - ❌ `fullyEstablished` 仍为 0 → `verack` 之后的阶段没走完（下一步查 `bm_command_verack` / `connection_fully_established` 状态机，以及是否误入 TLS 分支）
 
+### 1.11 M2.7 续：又两个假设被排除（2026-11-18 09:30）
+
+| 假设 | 验证方式 | 结果 |
+|---|---|---|
+| 卡在 TLS 握手（APK 没带 `sslkeys`） | 给 `state.disable_tls` 加开关，kivy 模式下跳过 `isSSL` | ❌ 不是它：关掉 TLS 后仍 `fullyEstablished=0` |
+| 对端不发 verack | 在 `bmproto` 打点，逐包打印收到的命令 | 实际顺序常是 **verack 先到、version 后到**，且 `verackSent=False` |
+
+**真正的原因（debug.log 抓到）**：
+
+```
+ERROR - 85.114.135.102:8444 error: 2,
+        bytearray(b'Too many connections from your IP. Closing connection.')
+```
+
+我们的连接池对**同一批节点反复建连**（默认 `maxoutboundconnections=8`，而 knownnodes 里只有 1–2 个可用节点），
+对端把来自同一 IP 的多条连接判为重复并主动断开 → 永远走不到 `fullyEstablished`。
+
+处置：`maxoutboundconnections` 调到 2；并把 knownnodes 指向**自己的宿主节点** `10.0.2.2:8444`
+（模拟器内网地址，可控、可复现），用于把 M2.7 与 M3 的联调环境固定下来。
+
+**当前卡点**：宿主节点已能收到模拟器发来的 `version`（`ver=3 streams=[1] timeOffset=-1`），
+但宿主没有回 `version`，所以 App 侧 `userAgent` 为空、未 established。下一步在宿主侧
+`bm_command_version` 的 verack/version 发送路径打点（宿主是我们自己的代码，容易定位）。
+
 **顺带确认的环境事实**
 
 - 模拟器出网正常（`ping 8.8.8.8` 0% 丢包，`nc` 可连种子节点 8444）
