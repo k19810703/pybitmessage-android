@@ -121,6 +121,17 @@ def main():
     # Plaintext peer links are allowed by the protocol; messages stay E2E
     # encrypted. Re-enable once the certs are generated at build time.
     state.disable_tls = True
+
+    # There is no C PoW build for Android yet, so the pure-Python
+    # implementation needs ~10 minutes per object at the default difficulty.
+    # Default mobile builds onto the low-difficulty profile; users can turn it
+    # off by setting extralowdifficulty = false in keys.dat.
+    from bmconfigparser import config
+    if not config.has_option('bitmessagesettings', 'extralowdifficulty'):
+        config.set('bitmessagesettings', 'extralowdifficulty', 'true')
+        config.save()
+        print('POW: defaulting to extralowdifficulty on Android', flush=True)
+
     alias_core_modules()
     bitmessagemain.main()
 

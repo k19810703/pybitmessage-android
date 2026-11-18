@@ -56,6 +56,17 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Keep one debug signing key across builds, otherwise every APK has a
+      # different signature and `adb install -r` fails with
+      # INSTALL_FAILED_UPDATE_INCOMPATIBLE (users would have to uninstall and
+      # lose their data). actions/cache never overwrites an existing key, so
+      # the first run creates the keystore and later runs reuse it.
+      - name: Cache debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
       # p4a v2024.01.21 的 jpeg recipe 用 libjpeg-turbo 2.0.1（cmake_minimum_required 2.8.12）
       # runner 的 CMake 4.x 已移除 <3.5 兼容
       - name: Pin CMake 3.31
