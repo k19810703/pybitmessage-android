@@ -475,6 +475,13 @@ class BMXMLRPCRequestHandler(xmlrpc_server.SimpleXMLRPCRequestHandler):
 
 
 # pylint: disable=no-self-use,no-member,too-many-public-methods
+def _as_bytes(value):
+    """Return *value* as bytes (the API ships base64 encoded byte strings)."""
+    if isinstance(value, str):
+        return value.encode('utf-8')
+    return value
+
+
 @six.add_metaclass(CommandHandler)
 class BMRPCDispatcher(object):
     """This class is used to dispatch API commands"""
@@ -546,8 +553,8 @@ class BMRPCDispatcher(object):
     def _dump_inbox_message(
             msgid, toAddress, fromAddress, subject, received,
             message, encodingtype, read):
-        subject = shared.fixPotentiallyInvalidUTF8Data(subject)
-        message = shared.fixPotentiallyInvalidUTF8Data(message)
+        subject = _as_bytes(shared.fixPotentiallyInvalidUTF8Data(subject))
+        message = _as_bytes(shared.fixPotentiallyInvalidUTF8Data(message))
         return {
             'msgid': hexlify(msgid),
             'toAddress': toAddress,
@@ -563,8 +570,8 @@ class BMRPCDispatcher(object):
     def _dump_sent_message(  # pylint: disable=too-many-arguments
             msgid, toAddress, fromAddress, subject, lastactiontime,
             message, encodingtype, status, ackdata):
-        subject = shared.fixPotentiallyInvalidUTF8Data(subject)
-        message = shared.fixPotentiallyInvalidUTF8Data(message)
+        subject = _as_bytes(shared.fixPotentiallyInvalidUTF8Data(subject))
+        message = _as_bytes(shared.fixPotentiallyInvalidUTF8Data(message))
         return {
             'msgid': hexlify(msgid),
             'toAddress': toAddress,

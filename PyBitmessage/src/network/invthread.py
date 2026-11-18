@@ -42,7 +42,10 @@ class InvThread(StoppableThread):
 
     def handleLocallyGenerated(self, stream, hashId):
         """Locally generated inventory items require special handling"""
-        dandelion_ins.addHash(hashId, stream=stream)
+        if dandelion_ins.enabled:
+            # with Dandelion off the hash must not enter the stem map,
+            # or peers will be refused when they ask for the object
+            dandelion_ins.addHash(hashId, stream=stream)
         for connection in self.pool.connections():
             if dandelion_ins.enabled and connection != \
                     dandelion_ins.objectChildStem(hashId):
@@ -65,16 +68,28 @@ class InvThread(StoppableThread):
                     break
 
             if chunk:
+                print('INVTHREAD chunk=%d conns=%d' % (
+                    len(chunk), len(self.pool.connections())), flush=True)
                 for connection in self.pool.connections():
                     fluffs = []
                     stems = []
                     for inv in chunk:
                         if inv[0] not in connection.streams:
+                            print('INVTHREAD skip stream %r not in %r' % (
+                                inv[0], connection.streams), flush=True)
                             continue
                         try:
                             with connection.objectsNewToThemLock:
                                 del connection.objectsNewToThem[inv[1]]
                         except KeyError:
+                            print('INVTHREAD skip: hash not tracked %r' % (
+                                inv[1],), flush=True)
+                            continue
+                        if not dandelion_ins.enabled:
+                            # Dandelion off: announce to every peer, otherwise
+                            # the inv only goes to the (possibly None) stem
+                            # child and is silently dropped.
+                            fluffs.append(inv[1])
                             continue
                         try:
                             if connection == dandelion_ins.objectChildStem(inv[1]):
@@ -91,17 +106,20 @@ class InvThread(StoppableThread):
                             fluffs.append(inv[1])
 
                     if fluffs:
+                        print('INVTHREAD sending inv fluffs=%d to %s' % (
+                            len(fluffs), connection.destination.host),
+                            flush=True)
                         random.shuffle(fluffs)
                         connection.append_write_buf(protocol.CreatePacket(
                             'inv',
                             addresses.encodeVarint(
-                                len(fluffs)) + ''.join(fluffs)))
+                                len(fluffs)) + b''.join(fluffs)))
                     if stems:
                         random.shuffle(stems)
                         connection.append_write_buf(protocol.CreatePacket(
                             'dinv',
                             addresses.encodeVarint(
-                                len(stems)) + ''.join(stems)))
+                                len(stems)) + b''.join(stems)))
 
             invQueue.iterate()
             for _ in range(len(chunk)):

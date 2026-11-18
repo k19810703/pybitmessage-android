@@ -108,7 +108,7 @@ class singleWorker(StoppableThread):
         for oldack in state.ackdataForWhichImWatching:
             if len(oldack) == 32:
                 # attach legacy header, always constant (msg/1/1)
-                newack = '\x00\x00\x00\x02\x01\x01' + oldack
+                newack = b'\x00\x00\x00\x02\x01\x01' + oldack
                 state.ackdataForWhichImWatching[newack] = 0
                 sqlExecute(
                     '''UPDATE sent SET ackdata=? WHERE ackdata=? AND folder = 'sent' ''',
@@ -1198,20 +1198,21 @@ class singleWorker(StoppableThread):
                 {"subject": subject, "body": message}, encoding
             )
             payload += encodeVarint(encodedMessage.length)
-            payload += encodedMessage.data
+            _data = encodedMessage.data
+            payload += _data.encode('utf-8') if isinstance(_data, str) else _data
             if config.has_section(toaddress):
                 self.logger.info(
                     'Not bothering to include ackdata because we are'
                     ' sending to ourselves or a chan.'
                 )
-                fullAckPayload = ''
+                fullAckPayload = b''
             elif not protocol.checkBitfield(
                     behaviorBitfield, protocol.BITFIELD_DOESACK):
                 self.logger.info(
                     'Not bothering to include ackdata because'
                     ' the receiver said that they won\'t relay it anyway.'
                 )
-                fullAckPayload = ''
+                fullAckPayload = b''
             else:
                 # The fullAckPayload is a normal msg protocol message
                 # with the proof of work already completed that the
@@ -1220,7 +1221,7 @@ class singleWorker(StoppableThread):
                     ackdata, toStreamNumber, TTL)
             payload += encodeVarint(len(fullAckPayload))
             payload += fullAckPayload
-            dataToSign = pack('>Q', embeddedTime) + '\x00\x00\x00\x02' + \
+            dataToSign = pack('>Q', embeddedTime) + b'\x00\x00\x00\x02' + \
                 encodeVarint(1) + encodeVarint(toStreamNumber) + payload
             signature = highlevelcrypto.sign(
                 dataToSign, privSigningKeyHex, self.digestAlg)
@@ -1230,7 +1231,7 @@ class singleWorker(StoppableThread):
             # We have assembled the data that will be encrypted.
             try:
                 encrypted = highlevelcrypto.encrypt(
-                    payload, "04" + hexlify(pubEncryptionKeyBase256)
+                    payload, "04" + hexlify(pubEncryptionKeyBase256).decode()
                 )
             except Exception:  # noqa:B902 - keep going, but log why
                 self.logger.exception("highlevelcrypto.encrypt didn't work")

@@ -531,9 +531,9 @@ def decryptAndCheckPubkeyPayload(data, address):
         readPosition = 0
         # bitfieldBehaviors = decryptedData[readPosition:readPosition + 4]
         readPosition += 4
-        pubSigningKey = '\x04' + decryptedData[readPosition:readPosition + 64]
+        pubSigningKey = b'\x04' + decryptedData[readPosition:readPosition + 64]
         readPosition += 64
-        pubEncryptionKey = '\x04' + decryptedData[readPosition:readPosition + 64]
+        pubEncryptionKey = b'\x04' + decryptedData[readPosition:readPosition + 64]
         readPosition += 64
         specifiedNonceTrialsPerByteLength = decodeVarint(
             decryptedData[readPosition:readPosition + 10])[1]

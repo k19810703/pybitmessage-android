@@ -144,7 +144,10 @@ class MsgDecode(object):
 
     def decodeSimple(self, data):
         """Handle simple encoding"""
-        bodyPositionIndex = string.find(data, '\nBody:')
+        # wire data is bytes; string.find() no longer exists on py3
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        bodyPositionIndex = data.find(b'\nBody:')
         if bodyPositionIndex > 1:
             subject = data[8:bodyPositionIndex]
             # Only save and show the first 500 characters of the subject.
@@ -152,10 +155,10 @@ class MsgDecode(object):
             subject = subject[:500]
             body = data[bodyPositionIndex + 6:]
         else:
-            subject = ''
+            subject = b''
             body = data
         # Throw away any extra lines (headers) after the subject.
         if subject:
             subject = subject.splitlines()[0]
-        self.subject = subject
-        self.body = body
+        self.subject = subject.decode('utf-8', 'replace')
+        self.body = body.decode('utf-8', 'replace')

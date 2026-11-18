@@ -150,6 +150,9 @@ def reloadBroadcastSendersForWhichImWatching():
 
 def fixPotentiallyInvalidUTF8Data(text):
     """Sanitise invalid UTF-8 strings"""
+    if isinstance(text, str):
+        # already decoded (py3 callers often hand us str)
+        return text
     try:
         text.decode('utf-8')
         return text

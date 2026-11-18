@@ -44,8 +44,8 @@ class UploadThread(StoppableThread):
                 chunk_count = 0
                 for chunk in request:
                     del i.pendingUpload[chunk]
-                    if dandelion_ins.hasHash(chunk) and \
-                       i != dandelion_ins.objectChildStem(chunk):
+                    if dandelion_ins.enabled and dandelion_ins.hasHash(chunk) \
+                            and i != dandelion_ins.objectChildStem(chunk):
                         i.antiIntersectionDelay()
                         self.logger.info(
                             '%s asked for a stem object we didn\'t offer to it.',

@@ -360,8 +360,12 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
         now = time.time()
         if now < self.skipUntil:
             return True
-        for i in items:
-            self.pendingUpload[str(i)] = now
+        for raw in items:
+            # keys must be the raw bytes hashes, otherwise the upload thread
+            # never finds the object in state.Inventory
+            self.pendingUpload[
+                bytes(raw) if isinstance(raw, (bytearray, memoryview)) else raw
+            ] = now
         return True
 
     def _command_inv(self, extend_dandelion_stem=False):
@@ -380,7 +384,10 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
         if extend_dandelion_stem and not dandelion_ins.enabled:
             return True
 
-        for i in map(str, items):
+        for raw in items:
+            # decoded inventory vectors are bytes; str() would create
+            # "b'...'" keys that never match state.Inventory
+            i = bytes(raw) if isinstance(raw, (bytearray, memoryview)) else raw
             if i in state.Inventory and not dandelion_ins.hasHash(i):
                 continue
             if extend_dandelion_stem and not dandelion_ins.hasHash(i):
