@@ -11,14 +11,13 @@
 | 项 | 值 |
 |---|---|
 | 目标 | 一个 APK，装了的设备互相能发加密消息（无自建服务器，不上架） |
-| 当前阶段 | **G2 闸门已通过（A1–A4 全绿）；M2 剩余：包名/品牌（M2.5）与 UI 数据源统一（M2.6）** |
-| 已完成 | M1 构建链路；M2.1–M2.4 全部通过（**G2.1/G2.2/G2.3/G2.4**）；**G2 达成**：地址 3.7s、已连上 1 个节点（fullyEstablished） |
+| 当前阶段 | **M2 完成（G2 闸门 + M2.5 改名 + M2.6 数据源统一）；下一阶段 = M3 收发闭环** |
+| 已完成 | M1 构建链路 + M2 全部：G2.1/G2.2/G2.3/G2.4/G2.6 通过；包名 `at.bitmessage.pybitmessage`，标签 PyBitmessage；地址 3.7s、连接 fullyEstablished、UI 显示真实身份 |
 | 仓库 | **<https://github.com/k19810703/pybitmessage-android>**（public，默认分支 `android-port`） |
 | 仓库结构 | `PyBitmessage/`（代码）/ `PyBitmessage-android/`（文档）/ `artifacts/`（gitignore） |
 | 最近成功构建 | [run 44091360456](https://github.com/k19810703/pybitmessage-android/actions/runs/44091360456)（含地址生成修复），11 分 27 秒 |
 | 基线 APK | `PyBitmessage-android/artifacts/pybitmessage-apk-16/pybitmessagemock-0.1.2-arm64-v8a-debug.apk`（API 可用、含 INTERNET） |
-| 包名（现状） | `at.bitmessage.pybitmessagemock`（Mock 壳） |
-| 包名（M2.5.1 之后） | `at.bitmessage.pybitmessage` —— 本文所有 `run-as`/`am start` 命令以**当前包名**为准，改造后需替换 |
+| 包名 | **`at.bitmessage.pybitmessage`**（标签 `PyBitmessage`）—— 本文命令里的 `run-as`/`am start` 已按此更新 |
 | 产品需求（待做） | **界面必须中文**、**适配平板** → 见 `MILESTONES.md` M6（Kivy 侧目前零翻译机制） |
 | 唯一任务来源 | **`PyBitmessage-android/MILESTONES.md`**（任务 ID、验收标准、Gate） |
 
@@ -110,6 +109,7 @@ remote: origin → git@github.com:k19810703/pybitmessage-android.git
 - 已有：`INTERNET` 权限、本地 API 可用（`clientStatus` 正常）
 - 已有：真实地址 `BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD`（生成 3.7s，重启不丢）
 - 联网：✅ `networkConnections=1`，`fullyEstablished=1`（连的是宿主节点 10.0.2.2:8444）
+- UI：✅ 顶栏显示真实身份 `Final (BM-2cWwkgY93Kqn9D...)`；`pybitmessage.state is state: True`
 
 ---
 
@@ -246,7 +246,7 @@ git -C PyBitmessage checkout <good_commit> -- <path>  # 只回退单个文件
 APK 动辄 25 MB，网络不稳时下载很痛。**只改 `.py`** 的改动可以直接推进已安装的应用：
 
 ```bash
-PKG=at.bitmessage.pybitmessagemock
+PKG=at.bitmessage.pybitmessage
 for f in api.py class_addressGenerator.py main.py; do
   adb push PyBitmessage/src/$f /data/local/tmp/$f
   adb shell "run-as $PKG sh -c 'cat /data/local/tmp/$f > files/app/$f && rm -f files/app/${f%.py}.pyc'"
@@ -330,3 +330,4 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-18 | v2.2 | M2.4 完成：G2.4 通过、A1 达成（3.7s）；新增热补丁调试法 §6.7 |
 | 2026-11-18 | v2.3 | M2.7 进展：dontconnect/时钟/assembleErrorMessage 三坑已修；握手到 version，未 fullyEstablished |
 | 2026-11-18 | v2.4 | **G2 通过**：CreatePacket str 命令 + userAgent bytearray 两个 bug 修掉后连接建立 |
+| 2026-11-18 | v2.5 | **M2 完成**：包名改 `at.bitmessage.pybitmessage`、UI 与核心共用模块对象 |

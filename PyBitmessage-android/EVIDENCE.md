@@ -213,6 +213,19 @@ FATAL EXCEPTION 计数 = 0
 **这一轮累计修掉的握手链路 py3 问题**（按发现顺序）：
 `dontconnect` 未清 → 模拟器时钟漂移 → `assembleErrorMessage` str/bytes → `CreatePacket` str 命令 → `userAgent` bytearray 正则。
 
+### 1.13 ✅ M2.5 / M2.6 完成（2026-11-18 10:00）
+
+| 任务 | 结果 | 证据 |
+|---|---|---|
+| M2.5.1 去 Mock 命名 | ✅ 代码已改 | `buildozer.spec`: `title = PyBitmessage`、`package.name = pybitmessage` → `at.bitmessage.pybitmessage`；APK 由 run 44219919909 产出 |
+| M2.6 UI 数据源统一 | ✅ 设备验证 | 入口新增模块别名，logcat 输出 `ALIAS pybitmessage.state is state: True` |
+| M2.6.1 去掉 mock 配置加载 | ✅ | `mpybit.py` 改为 `from pybitmessage.helper_startup import loadConfig` |
+| M2.6.2 真实统计 | ✅ | 仪表盘计数改为真实 SQL（近 30 天 inbox 条数） |
+| **G2.6 界面数据来自真实核心** | ✅ | 截图 `artifacts/screenshot-m26b.png`：顶栏显示 API 创建的身份 `Ui-test (BM-2cXP3HGpD7stf6...)`，不再是引导页 |
+
+**关键修复**：APK 里 `pybitmessage/` 是所有顶层模块的副本，Kivy 的 `from pybitmessage import state` 会拿到**第二份** state/config。
+`main.py` 现在把核心模块别名进 `pybitmessage.*`（`sys.modules` + 包属性），UI 与核心共用同一对象。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。

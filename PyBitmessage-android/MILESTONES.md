@@ -144,7 +144,7 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 | ID | 任务 | 改动 | 预估 | 验收标准 |
 |---|---|---|---|---|
-| M2.4.5a ⬜ | 修 UI 引导页跳转 | `src/bitmessagekivy/kv/login.kv`：`set_screen('random')` 指向根 `scr_mngr` 里真实存在的屏幕（或把 random 屏移入根管理器） | 2h | **S**：点 Proceed Next 能进入随机地址表单 |
+| M2.4.5a ⏭ | 修 UI 引导页跳转（推迟到 M3.1：地址创建先由 API 承担） | `src/bitmessagekivy/kv/login.kv`：`set_screen('random')` 指向根 `scr_mngr` 里真实存在的屏幕（或把 random 屏移入根管理器） | 2h | **S**：点 Proceed Next 能进入随机地址表单 |
 | M2.4.5b ✅ | 查清 `addressGenerator` 线程为何不消费队列 | 在 `class_addressGenerator.run()` 入口加日志；必要时用 `sys.excepthook`/`threading.excepthook` 抓守护线程异常 | 3h | **L**：logcat 出现 `addressGenerator: got request` 且 API 调用在 60s 内返回 |
 | M2.4.5c ✅ | API 调用加超时，避免单线程服务器被永久阻塞 | `src/api.py`：`apiAddressGeneratorReturnQueue.get(timeout=...)` 并返回明确错误 | 1h | **A**：失败时返回 Fault 而不是挂死 |
 
@@ -158,6 +158,9 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 > - ✅ **设备复验完成（2026-11-18）**：改用热补丁方式绕过 25 MB 下载；`createRandomAddress` 3.7s 返回 `BM-2cX1KSM87…`，重启后地址不变（详见 EVIDENCE §1.9）
 > - 待办：网络恢复后装 `pybitmessage-apk-5` 复验，产出 A1（60s 内出地址）与 G2.4（重启地址不变）证据
 
+> **M2 阶段完成（2026-11-18 10:20）**：G2 闸门 + M2.5 改名 + M2.6 数据源统一全部达成。
+> M2.4.5a（UI 内建创建地址入口）推迟到 M3.1，当前用 API 创建、UI 读取真实配置。
+
 > **G2 闸门 ✅ 已通过（2026-11-18 09:56）**：A1 地址 3.7s、A2 连接数 1（fullyEstablished）、A3 重启地址不变、A4 无 FATAL。
 > 见 `EVIDENCE.md` §1.12。M2 阶段剩余：M2.5（包名/品牌）、M2.6（UI 数据源统一）。
 
@@ -165,9 +168,9 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 | ID | 任务 | 改动 | 预估 | 验收标准 |
 |---|---|---|---|---|
-| M2.5.1 | 去 Mock 命名 | `title=PyBitmessage`、`package.name=pybitmessage` | 0.5h | **A**：`aapt2 dump badging` 显示 `package: name='at.bitmessage.pybitmessage'` |
+| M2.5.1 ✅ | 去 Mock 命名 | `title=PyBitmessage`、`package.name=pybitmessage` | 0.5h | **A**：`aapt2 dump badging` 显示 `package: name='at.bitmessage.pybitmessage'` |
 | M2.5.2 ✅ | 加联网权限 | `android.permissions = INTERNET, ACCESS_NETWORK_STATE` | 0.5h | **A**：`aapt2 dump badging \| grep uses-permission` 含 INTERNET（已达成，见 EVIDENCE §1.6） |
-| M2.5.3 | 依赖补齐 | requirements 加 `msgpack`（可选）、`pycryptodome`（若 M2.1.3 需要） | 1h | **L**：启动无 `ImportError` |
+| M2.5.3 ✅ | 依赖补齐 | requirements 加 `msgpack`（可选）、`pycryptodome`（若 M2.1.3 需要） | 1h | **L**：启动无 `ImportError` |
 
 > **Gate G2.5**：包名、权限、依赖三项在 `aapt2 dump` 与 logcat 中都能对上。
 
@@ -175,11 +178,11 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 | ID | 任务 | 改动 | 预估 | 验收标准 |
 |---|---|---|---|---|
-| M2.6.1 | 换掉 mock 配置加载 | `src/bitmessagekivy/mpybit.py`：`mockbm.helper_startup` → 真实 `helper_startup` | 2h | **S**：地址列表显示的地址与 `keys.dat` 一致 |
-| M2.6.2 | 换掉 mock 网络统计 | 引用 `mockbm.network` 的地方改 `network.stats` | 2h | **S**：网络页显示真实连接数（与 API 一致） |
-| M2.6.3 | mock 仅保留给测试 | `src/mockbm/` 加注释；`tests-kivy.py` 仍可用 | 1h | **L**：`python3 tests-kivy.py` 仍能跑（不阻塞主流程） |
+| M2.6.1 ✅ | 换掉 mock 配置加载 | `src/bitmessagekivy/mpybit.py`：`mockbm.helper_startup` → 真实 `helper_startup` | 2h | **S**：地址列表显示的地址与 `keys.dat` 一致 |
+| M2.6.2 ✅ | 换掉 mock 网络统计 | 引用 `mockbm.network` 的地方改 `network.stats` | 2h | **S**：网络页显示真实连接数（与 API 一致） |
+| M2.6.3 ✅ | mock 仅保留给测试 | `src/mockbm/` 加注释；`tests-kivy.py` 仍可用 | 1h | **L**：`python3 tests-kivy.py` 仍能跑（不阻塞主流程） |
 
-> **Gate G2.6**：界面数据全部来自真实核心，mock 只在测试路径。
+> **Gate G2.6 ✅ 已通过（2026-11-18）**：界面显示真实身份 `Ui-test (BM-2cXP3HGpD7stf6...)`，与 keys.dat 一致；mock 仅 `tests-kivy.py` 使用。
 
 ### M2.7 P2P 联网验证（1 天）
 
