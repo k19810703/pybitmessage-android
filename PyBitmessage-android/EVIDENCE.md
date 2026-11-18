@@ -356,6 +356,30 @@ INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package ... signatures do not match
 导致 big-inv 公告 `payload += obj_hash` 抛 `TypeError`（commit `8432ac4`）。
 两端回归：30 秒送达 ✅。
 
+### 1.19 ✅ 设备 → 宿主 加密消息送达（2026-11-18 15:05）
+
+**在模拟器上（APK `pybitmessage-apk-14`，包名 `at.bitmessage.pybitmessage`）**
+
+```
+app 地址 : BM-2cX1JihrRaZmaenebg4rx3Em4RnV2efrBy
+宿主地址 : BM-2cV2kDCw9XMUGFDmzxCikeYFExXBRamyrv
+app 状态 : doingmsgpow → msgsent（40 秒）
+宿主收件箱：from_android = 1
+  主题：来自安卓
+  正文：第一台设备发出的加密消息 🎉
+```
+
+这是**第一台"设备"发出的真实加密消息**，走完整链路：组包 → ECIES 加密 → PoW → inv/getdata → 对端解密 → 入库。
+
+**反向（宿主 → 设备）发现并修掉最后一个接收端断点**：
+`helper_bitcoin.calculateBitcoinAddressFromPubkey` 里 `'\x00' + ripe.digest()`（str + bytes），
+且 `changebase` 返回 bytes 又被拼到 str 上 → `processmsg` 崩溃（commit `34be514`）。
+修复后需要重新出包验证（run 44256966156）。
+
+**测试环境说明**：设备上 `BMPOW` 不可用，默认难度一条消息约 10 分钟；
+本次验证在两端开启 `extralowdifficulty = true`（40 秒送达）。
+生产前必须解决 PoW 性能（把 `bitmsghash` 编进 APK，或调整难度策略）。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
