@@ -315,6 +315,9 @@ def isProofOfWorkSufficient(
 
 def CreatePacket(command, payload=b''):
     """Construct and return a packet"""
+    if isinstance(command, str):
+        # the header packs the command as 12s, which requires bytes on py3
+        command = command.encode('ascii')
     payload_length = len(payload)
     checksum = hashlib.sha512(payload).digest()[0:4]
 

@@ -583,12 +583,24 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
         print('BMPROTO version parsed: ver=%s streams=%r timeOffset=%s' % (
             self.remoteProtocolVersion, self.streams, self.timeOffset),
             flush=True)
-        if not self.peerValidityChecks():
+        try:
+            _pvc = self.peerValidityChecks()
+        except Exception:  # noqa: BLE001 - diagnostic
+            import traceback
+            print('PVC RAISED', flush=True)
+            traceback.print_exc()
+            _pvc = False
+        print('BMPROTO version checked -> %r' % (_pvc,), flush=True)
+        if not _pvc:
             print('BMPROTO version REJECTED by peerValidityChecks', flush=True)
             # ABORT afterwards
             return True
         self.append_write_buf(protocol.CreatePacket('verack'))
         self.verackSent = True
+        print('BMPROTO sent verack (outbound=%s)' % self.isOutbound, flush=True)
+        if isinstance(self.userAgent, (bytes, bytearray)):
+            # decoded payload fields are bytes on py3; re needs str
+            self.userAgent = self.userAgent.decode('ascii', 'replace')
         ua_valid = re.match(
             r'^/[a-zA-Z]+:[0-9]+\.?[\w\s\(\)\./:;-]*/$', self.userAgent)
         if not ua_valid:
@@ -598,6 +610,7 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
                 self.destination.host, self.destination.port,
                 self.pool.streams, dandelion_ins.enabled, True,
                 nodeid=self.nodeid))
+            print('BMPROTO sent version back to peer', flush=True)
             logger.debug(
                 '%(host)s:%(port)i sending version',
                 self.destination._asdict())
@@ -615,6 +628,7 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
     # pylint: disable=too-many-return-statements
     def peerValidityChecks(self):
         """Check the validity of the peer"""
+        print('PVC enter', flush=True)
         if self.remoteProtocolVersion < 3:
             self.append_write_buf(protocol.assembleErrorMessage(
                 errorText="Your is using an old protocol. Closing connection.",
