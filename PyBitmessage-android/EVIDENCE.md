@@ -356,7 +356,7 @@ INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package ... signatures do not match
 导致 big-inv 公告 `payload += obj_hash` 抛 `TypeError`（commit `8432ac4`）。
 两端回归：30 秒送达 ✅。
 
-### 1.19 ✅ 设备 → 宿主 加密消息送达（2026-11-18 15:05）
+### 1.19 ⚠️ 设备侧验证：一次误判与当前真实状态（2026-11-18 15:45）
 
 **在模拟器上（APK `pybitmessage-apk-14`，包名 `at.bitmessage.pybitmessage`）**
 
@@ -369,7 +369,12 @@ app 状态 : doingmsgpow → msgsent（40 秒）
   正文：第一台设备发出的加密消息 🎉
 ```
 
-这是**第一台"设备"发出的真实加密消息**，走完整链路：组包 → ECIES 加密 → PoW → inv/getdata → 对端解密 → 入库。
+**⚠️ 更正**：这次"送达"其实是**自发自收**。原因是宿主节点的 `apiport` 被改成了 8442，
+和 `adb forward tcp:8442` 冲突——所有打到 127.0.0.1:8442 的 API 调用实际落在**宿主节点**上，
+而不是模拟器里的 App。收件箱里那封信的 `toAddress == fromAddress`，即 App 发给自己的。
+
+**教训（已记入 §6.6）**：用 API 做验收前，必须先确认两端端点**地址不同**（例如打印 `listAddresses`），
+并给宿主节点分配一个不会和 adb forward 撞车的端口（现用 8449）。
 
 **反向（宿主 → 设备）发现并修掉最后一个接收端断点**：
 `helper_bitcoin.calculateBitcoinAddressFromPubkey` 里 `'\x00' + ripe.digest()`（str + bytes），
@@ -379,6 +384,21 @@ app 状态 : doingmsgpow → msgsent（40 秒）
 **测试环境说明**：设备上 `BMPOW` 不可用，默认难度一条消息约 10 分钟；
 本次验证在两端开启 `extralowdifficulty = true`（40 秒送达）。
 生产前必须解决 PoW 性能（把 `bitmsghash` 编进 APK，或调整难度策略）。
+
+### 1.20 设备 ↔ 宿主：当前真实状态（2026-11-18 15:45）
+
+端点已经彻底分开后（App 走 `adb forward 8442`，宿主 API 走 8449）重新测：
+
+| 方向 | 状态 | 卡点 |
+|---|---|---|
+| 设备 → 宿主 | ❌ `doingmsgpow` 长时间不结束 | 设备端没有 C 版 PoW（`BMPOW` 不可用），`_doSafePoW` 纯 Python；`extralowdifficulty` 是否对 msg 生效尚未确认 |
+| 宿主 → 设备 | ❌ `awaitingpubkey` | 设备侧 pubkey 的 PoW/广播同样慢 |
+
+**已经确认可用的部分**：App 安装、启动、建地址（`BM-2cTwYxYJ…`）、连上宿主（`fullyEstablished`）、
+UI 显示真实身份、API 可读写收件箱。
+
+**结论**：协议层闭环（两个节点之间）已经用本地双节点验证通过；
+**设备 ↔ 外部节点还没有一次干净的端到端证据**，卡在设备端 PoW 性能上。
 
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
