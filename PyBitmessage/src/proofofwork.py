@@ -308,7 +308,13 @@ def run(target, initialHash):
         # does not like this and fights with PyBitmessage
         # over CPU, resulting in very slow PoW
         # added on 2015-11-29: multiprocesing.freeze_support() doesn't help
-        return _doFastPoW(target, initialHash)
+        try:
+            return _doFastPoW(target, initialHash)
+        except Exception:  # noqa: BLE001
+            # python-for-android's _multiprocessing has no sem_unlink(), so
+            # the pool cannot even be created on Android; fall back to the
+            # single-process implementation instead of failing the send.
+            logger.warning('Fast PoW unavailable, using safe PoW')
 
     return _doSafePoW(target, initialHash)
 
