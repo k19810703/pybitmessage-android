@@ -149,38 +149,38 @@ class singleWorker(StoppableThread):
             if command == 'sendmessage':
                 try:
                     self.sendMsg()
-                except:  # noqa:E722
-                    self.logger.warning("sendMsg didn't work")
+                except Exception:  # noqa:B902 - keep going, but log why
+                    self.logger.exception("sendMsg didn't work")
             elif command == 'sendbroadcast':
                 try:
                     self.sendBroadcast()
-                except:  # noqa:E722
-                    self.logger.warning("sendBroadcast didn't work")
+                except Exception:  # noqa:B902 - keep going, but log why
+                    self.logger.exception("sendBroadcast didn't work")
             elif command == 'doPOWForMyV2Pubkey':
                 try:
                     self.doPOWForMyV2Pubkey(data)
-                except:  # noqa:E722
-                    self.logger.warning("doPOWForMyV2Pubkey didn't work")
+                except Exception:  # noqa:B902 - keep going, but log why
+                    self.logger.exception("doPOWForMyV2Pubkey didn't work")
             elif command == 'sendOutOrStoreMyV3Pubkey':
                 try:
                     self.sendOutOrStoreMyV3Pubkey(data)
-                except:  # noqa:E722
-                    self.logger.warning("sendOutOrStoreMyV3Pubkey didn't work")
+                except Exception:  # noqa:B902 - keep going, but log why
+                    self.logger.exception("sendOutOrStoreMyV3Pubkey didn't work")
             elif command == 'sendOutOrStoreMyV4Pubkey':
                 try:
                     self.sendOutOrStoreMyV4Pubkey(data)
-                except:  # noqa:E722
-                    self.logger.warning("sendOutOrStoreMyV4Pubkey didn't work")
+                except Exception:  # noqa:B902 - keep going, but log why
+                    self.logger.exception("sendOutOrStoreMyV4Pubkey didn't work")
             elif command == 'sendOnionPeerObj':
                 try:
                     self.sendOnionPeerObj(data)
-                except:  # noqa:E722
-                    self.logger.warning("sendOnionPeerObj didn't work")
+                except Exception:  # noqa:B902 - keep going, but log why
+                    self.logger.exception("sendOnionPeerObj didn't work")
             elif command == 'resetPoW':
                 try:
                     proofofwork.resetPoW()
-                except:  # noqa:E722
-                    self.logger.warning("proofofwork.resetPoW didn't work")
+                except Exception:  # noqa:B902 - keep going, but log why
+                    self.logger.exception("proofofwork.resetPoW didn't work")
             elif command == 'stopThread':
                 self.busy = 0
                 return
@@ -264,7 +264,7 @@ class singleWorker(StoppableThread):
         TTL = int(28 * 24 * 60 * 60 + helper_random.randomrandrange(-300, 300))
         embeddedTime = int(time.time() + TTL)
         payload = pack('>Q', (embeddedTime))
-        payload += '\x00\x00\x00\x01'  # object type: pubkey
+        payload += b'\x00\x00\x00\x01'  # object type: pubkey
         payload += encodeVarint(addressVersionNumber)  # Address version number
         payload += encodeVarint(streamNumber)
         # bitfield of features supported by me (see the wiki).
@@ -306,8 +306,8 @@ class singleWorker(StoppableThread):
             # The user deleted the address out of the keys.dat file
             # before this finished.
             pass
-        except:  # noqa:E722
-            self.logger.warning("config.set didn't work")
+        except Exception:  # noqa:B902 - keep going, but log why
+            self.logger.exception("config.set didn't work")
 
     def sendOutOrStoreMyV3Pubkey(self, adressHash):
         """
@@ -341,7 +341,7 @@ class singleWorker(StoppableThread):
         # expiresTime time.
 
         payload = pack('>Q', (embeddedTime))
-        payload += '\x00\x00\x00\x01'  # object type: pubkey
+        payload += b'\x00\x00\x00\x01'  # object type: pubkey
         payload += encodeVarint(addressVersionNumber)  # Address version number
         payload += encodeVarint(streamNumber)
         # bitfield of features supported by me (see the wiki).
@@ -394,8 +394,8 @@ class singleWorker(StoppableThread):
             # The user deleted the address out of the keys.dat file
             # before this finished.
             pass
-        except:  # noqa:E722
-            self.logger.warning("BMConfigParser().set didn't work")
+        except Exception:  # noqa:B902 - keep going, but log why
+            self.logger.exception("BMConfigParser().set didn't work")
 
     def sendOutOrStoreMyV4Pubkey(self, myAddress):
         """
@@ -416,7 +416,7 @@ class singleWorker(StoppableThread):
         TTL = int(28 * 24 * 60 * 60 + helper_random.randomrandrange(-300, 300))
         embeddedTime = int(time.time() + TTL)
         payload = pack('>Q', (embeddedTime))
-        payload += '\x00\x00\x00\x01'  # object type: pubkey
+        payload += b'\x00\x00\x00\x01'  # object type: pubkey
         payload += encodeVarint(addressVersionNumber)  # Address version number
         payload += encodeVarint(streamNumber)
         dataToEncrypt = protocol.getBitfield(myAddress)
@@ -602,7 +602,7 @@ class singleWorker(StoppableThread):
             TTL = int(TTL + helper_random.randomrandrange(-300, 300))
             embeddedTime = int(time.time() + TTL)
             payload = pack('>Q', embeddedTime)
-            payload += '\x00\x00\x00\x03'  # object type: broadcast
+            payload += b'\x00\x00\x00\x03'  # object type: broadcast
 
             if addressVersionNumber <= 3:
                 payload += encodeVarint(4)  # broadcast version
@@ -1232,8 +1232,8 @@ class singleWorker(StoppableThread):
                 encrypted = highlevelcrypto.encrypt(
                     payload, "04" + hexlify(pubEncryptionKeyBase256)
                 )
-            except:  # noqa:E722
-                self.logger.warning("highlevelcrypto.encrypt didn't work")
+            except Exception:  # noqa:B902 - keep going, but log why
+                self.logger.exception("highlevelcrypto.encrypt didn't work")
                 sqlExecute(
                     '''UPDATE sent SET status='badkey' WHERE ackdata=? AND folder='sent' ''',
                     ackdata
@@ -1250,7 +1250,7 @@ class singleWorker(StoppableThread):
                 continue
 
             encryptedPayload = pack('>Q', embeddedTime)
-            encryptedPayload += '\x00\x00\x00\x02'  # object type: msg
+            encryptedPayload += b'\x00\x00\x00\x02'  # object type: msg
             encryptedPayload += encodeVarint(1)  # msg version
             encryptedPayload += encodeVarint(toStreamNumber) + encrypted
 
@@ -1404,7 +1404,7 @@ class singleWorker(StoppableThread):
         TTL = TTL + helper_random.randomrandrange(-300, 300)
         embeddedTime = int(time.time() + TTL)
         payload = pack('>Q', embeddedTime)
-        payload += '\x00\x00\x00\x00'  # object type: getpubkey
+        payload += b'\x00\x00\x00\x00'  # object type: getpubkey
         payload += encodeVarint(addressVersionNumber)
         payload += encodeVarint(streamNumber)
         if addressVersionNumber <= 3:
