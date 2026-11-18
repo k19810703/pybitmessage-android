@@ -158,6 +158,9 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 > - ✅ **设备复验完成（2026-11-18）**：改用热补丁方式绕过 25 MB 下载；`createRandomAddress` 3.7s 返回 `BM-2cX1KSM87…`，重启后地址不变（详见 EVIDENCE §1.9）
 > - 待办：网络恢复后装 `pybitmessage-apk-5` 复验，产出 A1（60s 内出地址）与 G2.4（重启地址不变）证据
 
+> **G2 闸门 ✅ 已通过（2026-11-18 09:56）**：A1 地址 3.7s、A2 连接数 1（fullyEstablished）、A3 重启地址不变、A4 无 FATAL。
+> 见 `EVIDENCE.md` §1.12。M2 阶段剩余：M2.5（包名/品牌）、M2.6（UI 数据源统一）。
+
 ### M2.5 打包参数（0.5 天）
 
 | ID | 任务 | 改动 | 预估 | 验收标准 |
@@ -187,8 +190,8 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 | ID | 任务 | 改动 | 预估 | 验收标准 |
 |---|---|---|---|---|
-| M2.7.1 | 打开 API 便于自动化验收 | `keys.dat` 里 `apienabled=true`、`apivariant=json`、apiuser/pass | 1h | **A**：`adb forward tcp:8442 tcp:8442` 后 `curl` 能拿到 `clientStatus` |
-| M2.7.2 | 验证出网连接 | 无（验证） | 2h | **A**：`networkConnections >= 1`，`networkStatus != notConnected` |
+| M2.7.1 ✅ | 打开 API 便于自动化验收 | `keys.dat` 里 `apienabled=true`、`apivariant=json`、apiuser/pass | 1h | **A**：`adb forward tcp:8442 tcp:8442` 后 `curl` 能拿到 `clientStatus` |
+| M2.7.2 ✅ | 验证出网连接 | 无（验证） | 2h | **A**：`networkConnections >= 1`，`networkStatus != notConnected` |
 | M2.7.3 | 验证能收到对象（inv/getdata 通路） | 无（验证） | 2h | **A**：`pendingDownload` 有变化 / logcat 有 `inv` 处理 |
 
 > **Gate G2（阶段出口）**：A1–A4 全绿

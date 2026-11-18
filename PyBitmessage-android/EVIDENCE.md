@@ -184,6 +184,35 @@ ERROR - 85.114.135.102:8444 error: 2,
 - 默认 knownnodes（2017 年那批 IP）**全部已下线**，必须用 `bootstrap8444.bitmessage.org` 解析出的活节点
 - 日志级别默认 WARNING，排查网络要看 `BITMESSAGE_LOG_DEBUG=1`（`src/main.py` 已加开关）
 
+### 1.12 ✅ A2 通过 —— G2 闸门达成（2026-11-18 09:56）
+
+**两个最后的握手 bug（commit `6ce9588`）**
+
+| # | 现象 | 根因 |
+|---|---|---|
+| 1 | 对端收到 version 却从不回 version/verack | `protocol.CreatePacket('verack')` 把 **str** 传进 `struct.pack('12s')` → `struct.error`，异常被吞；源头是 `bmproto` 里 `CreatePacket('verack')` 未用 bytes |
+| 2 | 处理 version 时抛 `cannot use a string pattern on a bytes-like object` | `re.match(pattern, self.userAgent)`，而解码出的字段是 **bytearray** |
+
+**修复后的实测证据（模拟器 ↔ 宿主节点 10.0.2.2:8444）**
+
+```
+networkConnections = 1        networkStatus = connectedButHaveNotReceivedIncomingConnections
+outbound 10.0.2.2:8444  fullyEstablished = 1  userAgent = /PyBitmessage:0.6.3.2/
+FATAL EXCEPTION 计数 = 0
+```
+
+**G2 闸门四项全部达成**
+
+| 项 | 结果 |
+|---|---|
+| A1 地址生成 < 60s | ✅ 3.7s（`BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD`） |
+| A2 连接数 ≥ 1 | ✅ 1（fullyEstablished） |
+| A3 重启地址不变 | ✅ force-stop 后仍为同一地址 |
+| A4 无 FATAL | ✅ 0 |
+
+**这一轮累计修掉的握手链路 py3 问题**（按发现顺序）：
+`dontconnect` 未清 → 模拟器时钟漂移 → `assembleErrorMessage` str/bytes → `CreatePacket` str 命令 → `userAgent` bytearray 正则。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。

@@ -11,8 +11,8 @@
 | 项 | 值 |
 |---|---|
 | 目标 | 一个 APK，装了的设备互相能发加密消息（无自建服务器，不上架） |
-| 当前阶段 | **M2.4 完成（G2.4 ✅）；M2.7 联网进行中：TCP 已通、version 握手成功，`fullyEstablished` 仍为 0** |
-| 已完成 | M1 构建链路；M2.1 能力探测（**G2.1**）；M2.2 Python 3 解禁（**G2.2**）；M2.3 真实核心启动（**G2.3**：APK 起来后跑的是真核心，已建库、显示真实引导页） |
+| 当前阶段 | **G2 闸门已通过（A1–A4 全绿）；M2 剩余：包名/品牌（M2.5）与 UI 数据源统一（M2.6）** |
+| 已完成 | M1 构建链路；M2.1–M2.4 全部通过（**G2.1/G2.2/G2.3/G2.4**）；**G2 达成**：地址 3.7s、已连上 1 个节点（fullyEstablished） |
 | 仓库 | **<https://github.com/k19810703/pybitmessage-android>**（public，默认分支 `android-port`） |
 | 仓库结构 | `PyBitmessage/`（代码）/ `PyBitmessage-android/`（文档）/ `artifacts/`（gitignore） |
 | 最近成功构建 | [run 44091360456](https://github.com/k19810703/pybitmessage-android/actions/runs/44091360456)（含地址生成修复），11 分 27 秒 |
@@ -109,7 +109,7 @@ remote: origin → git@github.com:k19810703/pybitmessage-android.git
 - 能装机：模拟器 `Pixel_6_API_33`（arm64-v8a / Android 13）
 - 已有：`INTERNET` 权限、本地 API 可用（`clientStatus` 正常）
 - 已有：真实地址 `BM-2cX1KSM87DGtSZcerwLi8a1zgmkAc2nTcD`（生成 3.7s，重启不丢）
-- 联网：TCP 可连活种子、`version` 握手成功（userAgent 可见），但 `fullyEstablished=0` → M2.7 继续
+- 联网：✅ `networkConnections=1`，`fullyEstablished=1`（连的是宿主节点 10.0.2.2:8444）
 
 ---
 
@@ -329,3 +329,4 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-17 | v2.1 | M2.4.5 代码修复完成（本地验证）；设备复验被网络阻塞 |
 | 2026-11-18 | v2.2 | M2.4 完成：G2.4 通过、A1 达成（3.7s）；新增热补丁调试法 §6.7 |
 | 2026-11-18 | v2.3 | M2.7 进展：dontconnect/时钟/assembleErrorMessage 三坑已修；握手到 version，未 fullyEstablished |
+| 2026-11-18 | v2.4 | **G2 通过**：CreatePacket str 命令 + userAgent bytearray 两个 bug 修掉后连接建立 |
