@@ -337,6 +337,25 @@ RESULT: B1 双向互通 OK ✅
 
 **这解释了此前所有"卡在 awaitingpubkey / 收不到"的现象**：不是网络问题，是公告线程在第一跳就炸了。
 
+### 1.18 设备侧验证：进展与两个新坑（2026-11-18 14:40）
+
+**设备 APK 一直跑的是旧代码** —— 根因不是构建，而是**签名不一致导致 `install -r` 静默失败**：
+
+```
+INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package ... signatures do not match newer version
+```
+
+每次 CI 构建都会生成新的 debug keystore，所以换包必须 `adb uninstall` 再装。
+修复后设备上的 `class_singleWorker.pyc` 才与 APK 内的一致（`logger.exception` 而非 `logger.warning`）。
+
+**设备侧 PoW 太慢**：`BMPOW` 不可用（没有 `libbitmsghash.so`），只能走纯 Python `_doSafePoW`，
+默认难度下**一条消息约 10 分钟**（模拟器 100% CPU）。测试时在两端开启
+`extralowdifficulty = true` 可降到秒级；生产需要把 `bitmsghash` 编进 APK（M3.4.2 遗留）。
+
+**顺手修掉**：`storage/sqlite.py:unexpired_hashes_by_stream()` 把 BLOB 哈希 `str()` 成 `"b'...'"`，
+导致 big-inv 公告 `payload += obj_hash` 抛 `TypeError`（commit `8432ac4`）。
+两端回归：30 秒送达 ✅。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
