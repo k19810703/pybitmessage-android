@@ -247,6 +247,32 @@ TypeError: can't concat str to bytes
 （`debug.py` 的日志级别覆盖了运行时 `setLevel(DEBUG)`，需要给日志装置单独设级别）。
 下一步：在宿主的 `objectProcessor` 里打点，确认 getpubkey 对象是否到达、tag 是否匹配。
 
+### 1.15 M3 续：PoW 在 Android 上修好，卡点收敛到 pubkey 交换（2026-11-18 11:25）
+
+**修掉的问题**：`_doFastPoW` 用 `multiprocessing.Pool`，而 p4a 的 `_multiprocessing` 没有 `sem_unlink`：
+
+```
+ImportError: cannot import name 'sem_unlink' from '_multiprocessing'
+→ 每次发送都死在 _doPOWDefaults
+```
+
+`proofofwork.run()` 现在捕获该异常并回退到单进程 `_doSafePoW`（commit `aff2234`）。
+
+**顺带**：`debug.py` 的日志级别改为读环境变量 `BITMESSAGE_LOG_LEVEL`（commit `c68f6ea`），
+这样设备上也能开 DEBUG，不用手写 `logging.dat`。
+
+**当前状态**
+
+| 环节 | 状态 |
+|---|---|
+| 组包（getpubkey/msg 载荷） | ✅ 修掉 6 处 str/bytes 拼接 |
+| PoW | ✅ 单进程回退可用（手机上较慢） |
+| 广播 inv | 🟡 应用侧状态推进到 `awaitingpubkey` |
+| 对端收到 getpubkey 并回 pubkey | ❌ **未完成**——宿主日志显示对象流量很大，但没有处理该 getpubkey |
+| msg 加密 → 投递 → Inbox | ⏳ 待 pubkey 通了才能验证 |
+
+**结论**：M3 还差 pubkey 交换这一段。下一步在宿主 `objectProcessor` 打点，确认 getpubkey 的 tag 匹配分支。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
