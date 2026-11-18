@@ -300,6 +300,43 @@ Host: 只看到自己的 InvBroadcaster，没有收到该 inv
 1. 彻底消除重复模块：让宿主也走 `src/main.py` 的 `alias_core_modules()`（或统一为包内相对导入）
 2. 在宿主 `bm_command_inv` / `objectProcessor.processgetpubkey` 打点，确认 inv 是否到达、tag 是否命中
 
+### 1.17 ✅ 加密消息双向互通达成（2026-11-18 13:40）
+
+**测试形态**：同一台机器上起两个真实节点（node1 监听 8444，node2 主动连它），
+通过 XML-RPC 驱动发送与收件箱读取，不依赖 UI、不依赖公网。
+
+**结果**
+
+```
+n1 = BM-2cWCriePLaizrfjb1vJBu19TTpkpHmFovz
+n2 = BM-2cUPgcRDEoDyPeoFH5AFoN3yKHzDv31RBc
+
+[n2->n1] inbox after 30s   subj=第一条   body=你好，这是从 node2 发到 node1 的加密消息
+[n1->n2] inbox after 12s   subj=回复     body=收到！这是 node1 的回复 🎉
+RESULT: B1 双向互通 OK ✅
+```
+
+中文与 emoji 均完好；两条消息都走了完整的 **ECIES 加密 → PoW → inv/getdata → 解密 → 入库** 链路。
+
+**这一轮修掉的 py3 断点（全部是 py2 `str == bytes` 的遗留）**
+
+| 文件 | 问题 | 后果 |
+|---|---|---|
+| `network/invthread.py` | `''.join(fluffs)`（hash 是 bytes） | 广播线程异常，**任何对象都不会被公告** |
+| `network/invthread.py` | Dandelion 关闭时仍只投给 stem 子节点 | inv 被静默丢弃 |
+| `network/uploadthread.py` | 同上，上传时仍做 stem 校验 | 对端要对象时被拒："asked for a stem object we didn't offer" |
+| `network/bmproto.py` | `map(str, items)` 把 hash 变成 `"b'...'"` | 收不到 inv、getdata 键对不上 |
+| `network/bmproto.py` | `pendingUpload[str(i)]` | 对象永远不上传 |
+| `class_singleWorker.py` | 消息体/ack/对象类型字面量是 str | 发送时 `can't concat str to bytes` |
+| `class_singleWorker.py` | `"04" + hexlify(...)` | `encrypt` 失败 → `badkey` |
+| `class_objectProcessor.py` | `'\x04' + decryptedData[...]` | 接收端重建公钥失败 |
+| `protocol.py` | 同上（pubkey 校验路径） | pubkey 被判无效 |
+| `helper_msgcoding.py` | `string.find(data, ...)` | 解码正文时崩（py2 API） |
+| `shared.py` | `fixPotentiallyInvalidUTF8Data` 只接受 bytes | API 取件箱时崩 |
+| `api.py` | 主题/正文是 str 时直接 b64encode | 同上 |
+
+**这解释了此前所有"卡在 awaitingpubkey / 收不到"的现象**：不是网络问题，是公告线程在第一跳就炸了。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
