@@ -11,7 +11,7 @@
 | 项 | 值 |
 |---|---|
 | 目标 | 一个 APK，装了的设备互相能发加密消息（无自建服务器，不上架） |
-| 当前阶段 | **M3 协议层闭环已通（本地双节点双向加密消息）；设备端卡在 PoW 性能，尚无干净的设备↔外部节点证据** |
+| 当前阶段 | **M3 收发闭环已通：设备上的 APK 与宿主节点双向加密消息成功（190s/20s）；剩 UI 展示与 PoW 提速** |
 | 已完成 | M1 构建链路 + M2 全部：G2.1/G2.2/G2.3/G2.4/G2.6 通过；包名 `at.bitmessage.pybitmessage`，标签 PyBitmessage；地址 3.7s、连接 fullyEstablished、UI 显示真实身份 |
 | 仓库 | **<https://github.com/k19810703/pybitmessage-android>**（public，默认分支 `android-port`） |
 | 仓库结构 | `PyBitmessage/`（代码）/ `PyBitmessage-android/`（文档）/ `artifacts/`（gitignore） |
@@ -333,3 +333,4 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-18 | v2.5 | **M2 完成**：包名改 `at.bitmessage.pybitmessage`、UI 与核心共用模块对象 |
 | 2026-11-18 | v2.6 | **M3 协议层打通**：双向加密消息成功；修掉 15 处 py3 str/bytes 断点 |
 | 2026-11-18 | v2.7 | 设备侧排查：签名导致换包失败、PoW 慢、API 端口撞车（一次自发自收的误判已更正） |
+| 2026-11-18 | v2.8 | **设备↔宿主双向加密消息打通**（G3 B1/B2/B3 达成） |

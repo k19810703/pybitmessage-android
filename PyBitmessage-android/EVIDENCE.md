@@ -400,6 +400,42 @@ UI 显示真实身份、API 可读写收件箱。
 **结论**：协议层闭环（两个节点之间）已经用本地双节点验证通过；
 **设备 ↔ 外部节点还没有一次干净的端到端证据**，卡在设备端 PoW 性能上。
 
+### 1.21 ✅ 设备 ↔ 外部节点 双向加密消息（2026-11-18 16:10）
+
+**端点（这次彻底分开，脚本先断言两地址不同）**
+
+```
+APP  (模拟器, adb forward 8442)  BM-2cUdA3CNGDdy31VR6xarezeBMjinsos9qe
+HOST (宿主节点, API 38681)       BM-2cWeeYy7vRbrKR6Y65Y2AARmXhhF4Nti48
+```
+
+**结果**
+
+```
+[A->B] delivered after 190s
+  subj: 设备来信
+  body: A→B 设备发给宿主的加密消息 🎉
+[B->A] delivered after 20s
+  subj: 宿主回信
+  body: B→A 宿主回给设备的加密消息 ✅
+RESULT: B1 设备↔宿主 双向 OK ✅
+```
+
+设备收件箱 `toAddress` = 设备地址、`fromAddress` = 宿主地址；截图
+`artifacts/screenshot-m3-device.png` 显示身份 `Android (BM-2cUdA3CNGDdy…)`。
+
+**G3 四项（协议/API 层面）**
+
+| 项 | 结果 |
+|---|---|
+| B1 双向互通 | ✅ 两个方向各 1 条 |
+| B2 ≤5 分钟 | ✅ 190s / 20s（两端 `extralowdifficulty`） |
+| B3 中英 emoji | ✅ 中文正文与 🎉✅ 完好 |
+| B4 ack 可见 | 🟡 API 返回 ackdata 并可查询状态；UI 展示待 M3.6 |
+
+**这一轮又修掉 2 个接收端字节问题**（commit `173df0f`）：
+`helper_bitcoin` testnet 前缀、`class_objectProcessor.ackDataHasValidHeader` 的命令比较。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
