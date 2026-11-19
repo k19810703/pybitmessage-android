@@ -1437,8 +1437,9 @@ class singleWorker(StoppableThread):
         self.logger.info('sending inv (for the getpubkey message)')
         invQueue.put((streamNumber, inventoryHash))
 
-        # wait 10% past expiration
-        sleeptill = int(time.time() + TTL * 1.1)
+        # Retry rather than waiting 10% past the TTL (~2.7 days): if the peer
+        # never answers the getpubkey the message would otherwise be stuck.
+        sleeptill = int(time.time() + min(TTL * 1.1, 1800))
         sqlExecute(
             '''UPDATE sent SET lastactiontime=?, '''
             ''' status='awaitingpubkey', retrynumber=?, sleeptill=? '''

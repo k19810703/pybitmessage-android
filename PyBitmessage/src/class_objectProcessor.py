@@ -261,9 +261,12 @@ class objectProcessor(threading.Thread):
                 ' the pubkey.')
         lastPubkeySendTime = config.safeGetInt(
             myAddress, 'lastpubkeysendtime')
-        # If the last time we sent our pubkey was more recent than
-        # 28 days ago...
-        if lastPubkeySendTime > time.time() - 2419200:
+        # Upstream waits 28 days before re-sending a pubkey. On a small
+        # network a peer that missed the announcement would be stuck for
+        # weeks, so make the window configurable and much shorter by default.
+        resend_window = config.safeGetInt(
+            'bitmessagesettings', 'pubkeyresendwindow', 3600)
+        if lastPubkeySendTime > time.time() - resend_window:
             return logger.info(
                 'Found getpubkey-requested-item in my list of EC hashes'
                 ' BUT we already sent it recently. Ignoring request.'

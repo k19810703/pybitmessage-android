@@ -138,6 +138,8 @@ class NavigateApp(MDApp):
         Window.bind(on_request_close=self.on_request_close)
         root = Builder.load_file(
             os.path.join(os.path.dirname(__file__), 'main.kv'))
+        print('BUILD root=%r ids=%r' % (type(root).__name__,
+                                        list(root.ids.keys())), flush=True)
         # Demo entry point: the simple Chinese messaging screen is what the
         # Android build shows on start. The original screens stay registered.
         try:

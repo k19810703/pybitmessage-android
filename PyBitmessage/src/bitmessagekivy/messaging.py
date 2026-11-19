@@ -65,7 +65,7 @@ def my_address():
     return None
 
 
-def create_address(label='手机地址'):
+def create_address(label='phone'):
     """Ask the address generator for a fresh random address (blocking)."""
     queues.apiAddressGeneratorReturnQueue.queue.clear()
     queues.addressGeneratorQueue.put((
@@ -100,10 +100,29 @@ class MessagingScreen(Screen):
         _register_cjk_font()
         self._build_ui()
         Clock.schedule_once(lambda _dt: self._ensure_address(), 1)
+        Clock.schedule_once(lambda _dt: self._prefill_from_intent(), 2)
         Clock.schedule_interval(self.refresh_inbox, 5)
 
+    def _prefill_from_intent(self):
+        """Let other apps share an address straight into the composer.
+
+        `adb shell am start -n ... --es to BM-2c...` or any ACTION_SEND with
+        the address as an extra pre-fills the recipient field.
+        """
+        try:
+            from jnius import autoclass
+            activity = autoclass(
+                'org.kivy.android.PythonActivity').mActivity
+            intent = activity.getIntent()
+            extra = intent.getStringExtra('to')
+            if extra:
+                self.to_input.text = extra.strip()
+                self._set_status('已填入收件人地址')
+        except Exception:  # noqa: BLE001 - desktop/tests have no jnius
+            pass
+
     # ---- ui -------------------------------------------------------------
-    def _label(self, text, size=15, bold=False, color=(1, 1, 1, 1),
+    def _label(self, text, size=15, bold=False, color=(.1, .1, .1, 1),
                height=None, halign='left'):
         lbl = Label(
             text=text, font_name=FONT, font_size=dp(size), bold=bold,
@@ -126,7 +145,7 @@ class MessagingScreen(Screen):
         root.add_widget(header)
 
         # inbox
-        root.add_widget(self._label('收件箱', size=13, color=(.75, .75, .75, 1),
+        root.add_widget(self._label('收件箱', size=13, color=(.4, .4, .4, 1),
                                     height=dp(22)))
         self.inbox_box = BoxLayout(orientation='vertical', size_hint_y=None,
                                    spacing=dp(4))
@@ -137,13 +156,13 @@ class MessagingScreen(Screen):
 
         # compose
         root.add_widget(self._label('收件人地址', size=13,
-                                    color=(.75, .75, .75, 1), height=dp(22)))
+                                    color=(.4, .4, .4, 1), height=dp(22)))
         self.to_input = TextInput(
             hint_text='BM-2c…', multiline=False, font_name=FONT,
             font_size=dp(14), size_hint_y=None, height=dp(42))
         root.add_widget(self.to_input)
 
-        root.add_widget(self._label('内容', size=13, color=(.75, .75, .75, 1),
+        root.add_widget(self._label('内容', size=13, color=(.4, .4, .4, 1),
                                     height=dp(22)))
         self.body_input = TextInput(
             hint_text='输入要发送的内容…', multiline=True, font_name=FONT,
@@ -155,7 +174,7 @@ class MessagingScreen(Screen):
         self.send_btn.bind(on_release=lambda *_: self._on_send())
         root.add_widget(self.send_btn)
 
-        self.status = self._label('', size=13, color=(.6, .9, .6, 1),
+        self.status = self._label('', size=13, color=(.1, .5, .1, 1),
                                   height=dp(24))
         root.add_widget(self.status)
 
@@ -242,7 +261,7 @@ class MessagingScreen(Screen):
             item.add_widget(self._label(title, size=14, bold=True,
                                         height=dp(24)))
             item.add_widget(self._label('来自 %s' % from_addr, size=11,
-                                        color=(.65, .65, .65, 1),
+                                        color=(.45, .45, .45, 1),
                                         height=dp(18)))
             item.add_widget(self._label(body[:120], size=12, height=dp(20)))
             self.inbox_box.add_widget(item)
