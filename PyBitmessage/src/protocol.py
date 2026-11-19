@@ -182,7 +182,10 @@ def checkIPAddress(host, private=False):
         return checkIPv4Address(host[12:], hostStandardFormat, private)
     elif host[0:6] == b'\xfd\x87\xd8\x7e\xeb\x43':
         # Onion, based on BMD/bitcoind
-        hostStandardFormat = base64.b32encode(host[6:]).lower() + ".onion"
+        # py3: b32encode returns bytes; bytes + str raised TypeError and
+        # killed the objectProcessor thread on onionpeer objects
+        hostStandardFormat = (
+            base64.b32encode(host[6:]).lower().decode('ascii') + ".onion")
         if private:
             return False
         return hostStandardFormat

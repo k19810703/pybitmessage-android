@@ -78,7 +78,7 @@ def main():
         elif opts.command == 'inbox':
             msgs = proxy.getAllInboxMessages()['inboxMessages']
             for m in msgs:
-                print('--- %s' % m['msgid'][:16])
+                print('--- %s' % bytes(m['msgid'].data)[:16].hex())
                 print('  from: %s  to: %s  received: %s' % (
                     m['fromAddress'], m['toAddress'], m['receivedTime']))
                 print('  subject: %s' % m['subject'])
@@ -89,8 +89,8 @@ def main():
             msgs = proxy.getAllSentMessages()['sentMessages']
             for m in msgs:
                 print('%s  to=%-20s status=%-14s ack=%s' % (
-                    m['msgid'][:16], m['toAddress'], m['status'],
-                    m['ackData'][:16]))
+                    bytes(m['msgid'].data)[:16].hex(), m['toAddress'],
+                    m['status'], bytes(m['ackData'].data)[:16].hex()))
             if not msgs:
                 print('(nothing sent)')
     except Exception as e:

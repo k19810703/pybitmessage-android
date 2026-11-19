@@ -1239,8 +1239,10 @@ class BMRPCDispatcher(object):
         # pylint: disable=too-many-locals
         if encodingType not in (2, 3):
             raise APIError(6, 'The encoding type must be 2 or 3.')
-        subject = self._decode(subject, "base64")
-        message = self._decode(message, "base64")
+        # _decode_text: _decode returns bytes on py3 and str(bytes) would
+        # store a "b'\\xe5\\x85\\xac...'" repr as the literal subject
+        subject = self._decode_text(subject, "base64")
+        message = self._decode_text(message, "base64")
         if len(subject + message) > (2 ** 18 - 500):
             raise APIError(27, 'Message is too long.')
         if TTL < 60 * 60:
@@ -1285,8 +1287,8 @@ class BMRPCDispatcher(object):
         if encodingType not in (2, 3):
             raise APIError(6, 'The encoding type must be 2 or 3.')
 
-        subject = self._decode(subject, "base64")
-        message = self._decode(message, "base64")
+        subject = self._decode_text(subject, "base64")
+        message = self._decode_text(message, "base64")
         if len(subject + message) > (2 ** 18 - 500):
             raise APIError(27, 'Message is too long.')
         if TTL < 60 * 60:

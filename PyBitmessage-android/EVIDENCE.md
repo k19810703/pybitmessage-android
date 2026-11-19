@@ -559,6 +559,45 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.26 ✅✅ G3 公网版达成：家庭网络双向加密消息 + 回执全通（2026-11-19 20:30）
+
+**环境**：Mac 脚本节点（`scripts/pubnet_node.py`，C PoW）+ 小米平板 5（TLS 修复包，
+热补丁后），两者都在家庭 Wi-Fi（192.168.31.x，小米路由器出口），各自连**公网节点**传播消息。
+
+**时间线**：
+
+| 时间 | 事件 |
+|---|---|
+| 19:44 | Mac 节点经 ~13 分钟重试抽签后 `TCP established: 85.114.135.102`（40 次被拒后成功——**证实"Too many connections"是瞬时/残留状态而非硬 ban**：同节点 19:46 拒、19:47 平板即被接受） |
+| 19:47 | 平板 `TCP established: 158.69.63.42:8080`（曾被拒 1 分钟后被同一节点接受） |
+| 19:52 | Mac→平板 发「公网测试 1」（协议默认难度，C PoW 秒级） |
+| 20:01 | 平板→Mac 发消息 1；**20:02:44 `THREAD-CRASH InvBroadcaster`**——发现 `dandelion.py removeHash()` 的 `ord()` py3 bug，getpubkey 卡死 |
+| 20:12 | 热补丁修复 dandelion.py + keys.dat 设 `dandelion=0`，重启 App |
+| 20:14:35 | **平板收件箱收到 Mac 的消息**（`公网测试 1`） |
+| 20:15:14 | **Mac 收件箱收到平板的消息**（awaitingpubkey 重试后 getpubkey→pubkey→msg 全链路通了） |
+| 20:18 | 平板侧 `ackreceived`（收到 Mac 的回执） |
+| 20:3x | Mac 侧第一条 `ackreceived`（收到平板的回执）——**双向消息 + 双向回执全部闭环** |
+
+**本轮修掉的 bug（均热补丁验证 + 已入库）**：
+
+| 文件 | bug | 症状 |
+|---|---|---|
+| `src/network/dandelion.py` `removeHash()` | py3 迭代 bytes 得 int，`ord(int)` 抛 TypeError（仅 DEBUG 日志开启 + dandelion 过期时触发） | **InvThread 整个线程死亡**，本节点对象永不广播（awaitingpubkey 卡死的真凶） |
+| `src/api.py` `sendMessage`/`sendBroadcast` | `_decode` 返回 bytes 直接入库，存成 `b'\xe5\x85\xac...'` repr 字符串 | API 发送的消息收方显示乱码（消息内容本身是好的） |
+| `scripts/pubnet_ctl.py` | xmlrpc 返回 `Binary` 对象不能切片；无 socket 超时 | sent/inbox 查询崩溃/挂起 |
+
+**遗留观察**（未修，不阻塞）：
+
+1. `THREAD-CRASH singleCleaner: memoryview not str`（20:01:44 再次确认）——knownnodes 落盘依赖它
+2. MIUI 锁屏即冻结 App（灭屏后 UDP `PermissionError`、API 无响应、启动卡住）——**演示时必须保持亮屏**（`svc power stayon usb`）
+3. `clientStatus.networkConnections` 与实际 socket 数不符（lsof 见 5 条 ESTABLISHED，API 报 1）
+4. 平板 20:14 发的第二条消息 `doingmsgpow` 卡 5+ 分钟（原因未查，第一条正常）
+5. 节点收到 SIGTERM 后优雅关闭流程可能挂死（旧节点变僵尸占单实例锁，需 `kill -9` + 删 `singleton.lock`）
+
+**产品结论**：App 装在设备上、连任意网络（热点/家庭 Wi-Fi），与其他节点经公网 Bitmessage
+网络互通加密消息，全链路（TCP+TLS、对象 PoW、pubkey 交换、消息传播、回执）真实可用。
+"Too many connections from your IP" 会随重试自然穿透，非阻塞。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。

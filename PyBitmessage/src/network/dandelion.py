@@ -84,9 +84,17 @@ class Dandelion:  # pylint: disable=old-style-class
     def removeHash(self, hashId, reason="no reason specified"):
         """Switch inventory vector from stem to fluff mode"""
         if logger.isEnabledFor(logging.DEBUG):
+            # py3: iterating bytes yields ints and ord() would raise
+            # TypeError ('ord() expected string of length 1'), killing
+            # the InvThread on the first expired dandelion stem
+            if isinstance(hashId, (bytes, bytearray)):
+                hex_id = bytes(hashId).hex()
+            else:
+                hex_id = ''.join(
+                    '%02x' % (i if isinstance(i, int) else ord(i))
+                    for i in hashId)
             logger.debug(
-                '%s entering fluff mode due to %s.',
-                ''.join('%02x' % ord(i) for i in hashId), reason)
+                '%s entering fluff mode due to %s.', hex_id, reason)
         with self.lock:
             try:
                 del self.hashMap[hashId]

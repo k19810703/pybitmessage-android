@@ -1,15 +1,15 @@
-# 交接单 · 2026-11-19 15:45
+# 交接单 · 2026-11-19 20:40
 
 > 目的：新 session 从这份文档直接接着干，不用回翻对话。
 > 除非特别说明，命令都在仓库根 `for_shizong/` 下执行，adb 用
 > `~/Documents/platform-tools/adb`。
-> 详细调查证据见 `EVIDENCE.md` §1.24/§1.25。
+> 详细调查证据见 `EVIDENCE.md` §1.24–§1.26。
 
 ---
 
 ## 1. 一句话状态
 
-**公网连接问题已定性：客户端与协议完全正常（平板换热点 IP 后 2 条连接秒建、正常同步对象流）；被拒的是公司出口 IP（今早旧 APK 重连循环轰炸种子的残留，粘性 per-IP 限制）。待办：换 IP（晚上家里）完成双向消息闭环。**
+**G3 公网版达成（2026-11-19 20:30）：家庭 Wi-Fi 下 Mac 脚本节点 ↔ 平板 App 经公网 Bitmessage 网络双向加密消息 + 双向回执全部闭环。** 本轮修掉 dandelion.py 的 `ord()` py3 bug（InvThread 死亡真凶）和 api.py 的 bytes 入库 bug（均热补丁验证、代码已入库待 CI 出包）。
 
 ---
 
@@ -36,28 +36,28 @@
 
 ---
 
-## 3. 公网连接：已定性，剩消息闭环（2026-11-19 15:35）
+## 3. 公网消息：已闭环（2026-11-19 20:30，EVIDENCE §1.26）
 
-**实验结论**（EVIDENCE.md §1.25）：
+**达成**：Mac 节点 ↔ 平板 App（同一家庭 Wi-Fi，各自连公网节点）双向加密消息 + 双向 ack
+全部送达。`Too many connections from your IP` 是**瞬时状态**（节点侧残留半死连接时的
+dup-IP 检查），重试抽签几分钟内自然穿透（同节点 19:46 拒、19:47 即接受），**非阻塞**。
 
-| 端 | 出口 IP | 结果 |
-|---|---|---|
-| 平板（iPhone 热点） | 运营商 NAT | ✅ 2 连接 + 2854 对象下载中 |
-| Mac（公司网 9.123.201.63） | IBM 出口 | ❌ 全部种子拒 `Too many connections from your IP`（maxout=1 也拒） |
+**本轮修复**（已入 git，热补丁已在设备验证；正式包需 CI 出包）：
 
-- **客户端/协议/TLS 无问题**；被拒的是 IP（今早旧 APK 30s/轮 × 数小时的轰炸残留）
-- "同 IP 并发连接"混合键型假设**已被排除为唯一原因**（单连接也被拒）
-- 拒绝时长未知；测试工具链全部就绪（见 §4 脚本）
+| 文件 | 修复 |
+|---|---|
+| `src/network/dandelion.py` | `removeHash()` 的 `ord()` py3 bug——**InvThread 死亡、对象永不广播的真凶** |
+| `src/api.py` | `sendMessage`/`sendBroadcast` 用 `_decode_text`（修 bytes repr 乱码） |
+| `scripts/pubnet_ctl.py` | Binary 切片 + socket 超时 |
+| `scripts/pubnet_tablet_setup.sh` | adb 引号 |
 
-**下一步（晚上家里，全新出口 IP）**：
+**注意**：平板当前跑的是**热补丁版**（dandelion.py、api.py 直接推进 `files/app/`），
+下次出包装机自然替换；热补丁方法见 AGENTS §6.7。平板 keys.dat 现为 `dandelion = 0`。
 
-1. Mac 和平板都连家里网络 → 跑 `scripts/PUBNET-TEST.md` 的 runbook
-2. Mac：`./scripts/pubnet_node.py` + `wait-conn`（家里 IP 干净应秒连）+ `create mac-test`
-3. 平板：已配置完毕（API u:p@8442、maxout=2、knownnodes=4 活节点、地址 `BM-2cU2vEDgphdWHe4Ucp1gSigCwDrJTRfyYV`），重连 USB 后 `adb forward tcp:8445 tcp:8442` 直接查状态即可；App 卡住就 force-stop 重启等 90s
-4. 双向消息（`pubnet_ctl.py send` / 平板 UI），预期 5-15 分钟
-5. **注意**：如果家里 IP 也被拒 → 说明拒绝按"客户端指纹"而非 IP（那就真要抓包了）；但热点实验已证明新 IP 可连，大概率是 IP 维度
-
-**备用方案**（家里 IP 万一也不行）：Mac 经 `adb forward tcp:18444 tcp:8444` 直连平板节点（USB 桥，已见 verack 回包未验证完）；或两台设备各连不同热点直接对发。
+**仍未修的观察项**：singleCleaner memoryview 崩溃（knownnodes 落盘依赖它）、MIUI 锁屏
+冻结 App（**演示必须亮屏**：`svc power stayon usb`）、networkConnections 计数失真、
+SIGTERM 优雅关闭挂死（重启 Mac 节点需 `kill -9` + 删 `/tmp/pubnet/singleton.lock`）、
+平板第二条消息 doingmsgpow 卡 5 分钟（未查）。
 
 ---
 
@@ -212,10 +212,12 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ## 8. 建议的下一步（按价值排序）
 
-1. **晚上家里（新 IP）跑 `scripts/PUBNET-TEST.md`**：Mac 节点连接 + 平板状态确认 + 双向消息闭环（G3 公网版）
-2. 消息闭环通过后：推送本地 commits、更新 MILESTONES/EVIDENCE、考虑给设备默认注入活节点（避免 fresh install 的 2017 死节点 SYN_SENT 问题进产品）
+1. **推送本轮修复 + CI 出包 + 装机复验**（dandelion/api 修复的正式包替代热补丁）
+2. 平板 UI 实测中文收发（API 路径已证明；UI 路径拍照留证）
 3. 修 `class_singleCleaner` 的 memoryview/str 崩溃（knownnodes 落盘依赖它）
-4. 平板横屏适配（`p4a_env_vars.txt` 里 `KIVY_ORIENTATION=Portrait` 写死，平板上是竖屏 letterbox）
-5. UI 补发送进度（把 `doingpubkeypow/awaitingpubkey/msgsent` 映射成中文）
+4. MIUI 保活（锁屏冻结问题，M4 范畴；演示先用 `svc power stayon usb`）
+5. 查 doingmsgpow 卡 5 分钟的问题
+6. 平板横屏适配（`KIVY_ORIENTATION=Portrait` 写死）；UI 补发送进度中文化
 
-**如果演示时间紧**：两台设备连同一 Wi-Fi，直接互连（不依赖公网种子），这条路已经验证能通，`extralowdifficulty=true` 时秒级；或两台设备各连不同手机热点走公网（热点实验已证明可行）。
+**演示口径**：两台设备（任意网络）↔ 互发加密消息已全链路可用；同 Wi-Fi 直连低难度
+（秒级）和公网（分钟级）两条路都验证过。
