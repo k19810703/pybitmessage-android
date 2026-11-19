@@ -465,6 +465,29 @@ RESULT: B1 设备↔宿主 双向 OK ✅
 | `io.UnsupportedOperation: fileno` | `LogOutput()` 假设 stdout 有 fileno，Android 上不是 |
 | APK 里没有 .so | `android.add_libs_arm64_v8a` 后面跟了缩进注释，被当作续行吞掉 |
 
+### 1.23 M3.9 · 中文界面已跑起来（2026-11-19 11:15）
+
+![中文收发界面](artifacts/ui-3.png)
+
+模拟器（Pixel 6 / Android 13）实测：
+
+| 元素 | 状态 |
+|---|---|
+| 我的地址 + 复制 | ✅ 显示 `BM-2cXh69uaVsgefdNcuk9x25r8wRYD3Y9vud` |
+| 收件箱（5 秒刷新） | ✅ 显示"（暂无消息）" |
+| 收件人地址 / 内容 / 发送 | ✅ 可输入、可点 |
+| 中文渲染 | ✅ 注册了系统 CJK 字体（`NotoSansCJK-Regular.ttc`），不再是方块 |
+| 从 Intent 预填收件人 | ✅ `am start … --es to BM-…` 可直接带地址打开 |
+
+发送点击后状态栏出现「已提交，正在广播…」，`sent` 表里出现该条（status `awaitingpubkey`）。
+
+**这里暴露出两个上游时间参数不适合小网络**：
+
+| 参数 | 上游值 | 后果 | 现在 |
+|---|---|---|---|
+| 重发 pubkey 窗口 | **28 天** | 对端错过一次公告就再也拿不到公钥（日志：`we already sent it recently. Ignoring request`） | `pubkeyresendwindow`，默认 **1 小时** |
+| awaitingpubkey 的 `sleeptill` | `TTL*1.1` ≈ **2.7 天** | 消息卡死在队列里 | 上限 **30 分钟** |
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
