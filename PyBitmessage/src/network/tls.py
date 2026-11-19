@@ -67,9 +67,14 @@ class TLSDispatcher(AdvancedDispatcher):
         # Once the connection has been established,
         # it's safe to wrap the socket.
         if sys.version_info >= (2, 7, 9):
+            # The purpose must match the role: a client authenticates the
+            # *server* (SERVER_AUTH), a server asks for the *client* cert
+            # (CLIENT_AUTH). Upstream had these swapped, which raised
+            # "Cannot create a client socket with a PROTOCOL_TLS_SERVER
+            # context" and made every TLS upgrade fail.
             context = ssl.create_default_context(
-                purpose=ssl.Purpose.SERVER_AUTH
-                if self.server_side else ssl.Purpose.CLIENT_AUTH)
+                purpose=ssl.Purpose.CLIENT_AUTH
+                if self.server_side else ssl.Purpose.SERVER_AUTH)
             context.set_ciphers(self.ciphers)
             context.set_ecdh_curve("secp256k1")
             context.check_hostname = False

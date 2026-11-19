@@ -120,7 +120,8 @@ def main():
     # NODE_SSL would fail before the connection is ever marked established.
     # Plaintext peer links are allowed by the protocol; messages stay E2E
     # encrypted. Re-enable once the certs are generated at build time.
-    state.disable_tls = True
+    # Allow the TLS upgrade: public peers may drop plaintext links.
+    state.disable_tls = os.environ.get('BITMESSAGE_DISABLE_TLS') == '1'
 
     # The C PoW library (libbitmsghash.so) makes protocol-default difficulty
     # fast enough (~4s per object), so do not lower it: public peers clamp the
