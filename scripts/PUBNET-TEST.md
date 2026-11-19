@@ -1,7 +1,54 @@
 # 公网收发验证 Runbook（Mac 脚本节点 + 平板热点）
 
+> **2026-11-19 15:45 状态**：热点实验已完成并成功（平板 2 连接 + 对象下载，
+> EVIDENCE.md §1.25）；公司出口 IP 被种子粘性拒绝（今早轰炸残留）。
+> **下一步：晚上家里网络（新 IP）跑本文 §6。**
+
+## 6. 今晚家里的流程（2026-11-19 晚）
+
+前置：Mac、平板都连家里网络；平板 USB 连 Mac。**平板已配置完毕**
+（API u:p@8442、地址 `BM-2cU2vEDgphdWHe4Ucp1gSigCwDrJTRfyYV`），无需再跑 setup。
+
+```bash
+# 1) Mac 节点（家里 IP 干净，wait-conn 应在 1-3 分钟内成功）
+cd /Users/wuhuidong/Documents/Workspace/for_shizong
+./scripts/pubnet_node.py                 # 终端 A，前台跑
+./scripts/pubnet_ctl.py wait-conn 300    # 终端 B
+./scripts/pubnet_ctl.py create mac-test  # 记下 mac 地址
+
+# 2) 平板状态（App 若卡住：force-stop 后 am start，等 90s）
+~/Documents/platform-tools/adb -s b45f8e87 forward tcp:8445 tcp:8442
+python3 scripts/pubnet_ctl.py --port 8445 status      # 期望 networkConnections>=1
+python3 scripts/pubnet_ctl.py --port 8445 addresses   # 确认仍是 BM-2cU2vEDg...
+
+# 3) Mac -> 平板
+./scripts/pubnet_ctl.py send BM-2cU2vEDgphdWHe4Ucp1gSigCwDrJTRfyYV <mac地址> '公网测试' 'hello via public net'
+./scripts/pubnet_ctl.py sent                          # awaitingpubkey -> msgsent
+python3 scripts/pubnet_ctl.py --port 8445 inbox       # 平板收件箱验证
+
+# 4) 平板 -> Mac（UI：收件人贴 mac 地址，内容随意，点发送）
+./scripts/pubnet_ctl.py inbox                         # Mac 收件箱验证
+```
+
+**判定**：
+- Mac `wait-conn` 失败且日志仍见 `Too many connections from your IP` → 家里 IP
+  也被拒（异常！说明可能不是 IP 维度），用备用方案（§7）并抓包
+- 双向消息到达 → **G3 公网版闭环达成**，记录 EVIDENCE 并推送 commits
+
+## 7. 备用方案
+
+- **USB 桥**：`adb -s b45f8e87 forward tcp:18444 tcp:8444` 后把
+  `--peer 127.0.0.1:18444` 加给 `pubnet_node.py`（Mac 直连平板节点，
+  已见 verack 回包未完整验证）；消息仍经平板的公网连接扩散
+- **双热点**：两台设备各连不同手机热点直接走公网（热点实验已证明可行）
+
+---
+
+（以下为原 runbook，历史参考）
+
 目的：验证「不同 IP + 单连接」下公网连接与加密消息收发（对应
-EVIDENCE.md §1.24 的两个假设验证 + G3 公网版闭环）。
+EVIDENCE.md §1.24/§1.25 的假设验证 + G3 公网版闭环）。
+热点连接部分已于 2026-11-19 15:16 验证通过。
 
 ## 0. 前置
 

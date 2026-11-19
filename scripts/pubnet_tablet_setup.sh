@@ -74,7 +74,7 @@ open('/tmp/pubnet_keys.dat', 'w').write('\n'.join(out) + '\n')
 print('keys.dat: injected', ', '.join(sorted(seen | set(inject))))
 PY
 $ADB push /tmp/pubnet_keys.dat /data/local/tmp/pubnet_keys.dat >/dev/null
-$ADB shell run-as $PKG sh -c 'cat /data/local/tmp/pubnet_keys.dat > files/bitmessage/keys.dat'
+$ADB shell "run-as $PKG sh -c 'cat /data/local/tmp/pubnet_keys.dat > files/bitmessage/keys.dat'"
 $ADB shell rm /data/local/tmp/pubnet_keys.dat
 
 echo "== write knownnodes.dat with live nodes =="
@@ -87,7 +87,7 @@ print(json.dumps([{
 } for n in nodes]))
 PY
 $ADB push /tmp/pubnet_knownnodes.dat /data/local/tmp/kn.dat >/dev/null
-$ADB shell run-as $PKG sh -c 'cat /data/local/tmp/kn.dat > files/bitmessage/knownnodes.dat'
+$ADB shell "run-as $PKG sh -c 'cat /data/local/tmp/kn.dat > files/bitmessage/knownnodes.dat'"
 $ADB shell rm /data/local/tmp/kn.dat
 
 echo "== restart app =="

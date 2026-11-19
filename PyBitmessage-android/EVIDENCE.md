@@ -536,6 +536,29 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **遗留进程提醒**：pid 28249（`python3 -`，cwd `/private/tmp/bmtest`，~200% CPU，无网络 socket）是更早 session 的 CPU 测试残留，本次未动，可按需 kill。
 
+### 1.25 ✅ 换 IP 实验证实：是 IP 级拒绝，客户端与协议无问题（2026-11-19 15:35）
+
+**实验设计**：同一份客户端代码（TLS 修复包），同一时间，两个不同出口 IP 同时连公网：
+
+| 端 | 出口 IP | 配置 | 结果 |
+|---|---|---|---|
+| 小米平板 5（iPhone 热点） | 172.20.10.x（运营商 NAT） | `pubnet_tablet_setup.sh` 注入（maxout=2、knownnodes=4 活节点） | ✅ **`networkConnections: 2`，`pendingDownload: 2854`**（正在真实下载网络对象） |
+| Mac 桌面节点 | 9.123.201.63（IBM 公司网出口） | `pubnet_node.py`，**maxout=1**（单连接）、单进程、已清理全部遗留节点 | ❌ 全部 4 个活节点持续回 `Too many connections from your IP` |
+
+平板地址（本次实验产生，API u:p@8442 已配置）：
+`BM-2cU2vEDgphdWHe4Ucp1gSigCwDrJTRfyYV`（label `phone`）
+
+**结论**：
+
+1. **线协议、TLS、客户端握手全部正常**——新 IP 上连接秒级建立并开始同步对象流
+2. **"同 IP 并发连接"（混合键型）假设被排除为唯一原因**：Mac 用 maxout=1 单连接仍被拒
+3. 公司/家庭出口 IP 在种子侧处于**粘性拒绝状态**，最可能来源 = 今早旧 APK（TLS bug 导致 30s 一轮的重连循环，跑了数小时，平板+模拟器+宿主节点同出口）触发的 per-IP 限制
+4. 拒绝持续时长未知；4 个已知节点同拒（可能同一批运维）
+
+**未完成的桥接实验**（被有意中止）：Mac 经 `adb forward tcp:18444 tcp:8444` 直连平板节点，被杀前已收到对端 verack——USB 桥接方案可行但未验证完毕，留作备用。
+
+**15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。

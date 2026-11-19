@@ -1,15 +1,15 @@
-# 交接单 · 2026-11-19 14:25
+# 交接单 · 2026-11-19 15:45
 
 > 目的：新 session 从这份文档直接接着干，不用回翻对话。
 > 除非特别说明，命令都在仓库根 `for_shizong/` 下执行，adb 用
 > `~/Documents/platform-tools/adb`。
-> 详细调查证据见 `EVIDENCE.md` §1.24。
+> 详细调查证据见 `EVIDENCE.md` §1.24/§1.25。
 
 ---
 
 ## 1. 一句话状态
 
-**协议、加密、C-PoW、中文 UI、TLS 全部打通；当前唯一卡点收窄为：所有公网种子在 version 交换后回 `error: 2 "Too many connections from your IP"`（对端主动拒绝），TCP 层本身能通。已定位到一个上游 addConnection 混合键型 bug 作为头号嫌疑。**
+**公网连接问题已定性：客户端与协议完全正常（平板换热点 IP 后 2 条连接秒建、正常同步对象流）；被拒的是公司出口 IP（今早旧 APK 重连循环轰炸种子的残留，粘性 per-IP 限制）。待办：换 IP（晚上家里）完成双向消息闭环。**
 
 ---
 
@@ -36,34 +36,28 @@
 
 ---
 
-## 3. 当前卡点（公网连接被种子拒绝）
+## 3. 公网连接：已定性，剩消息闭环（2026-11-19 15:35）
 
-**现象**（桌面对照节点 `/tmp/desk_control.py`，只保留 Mac 一个节点在发连接）：
+**实验结论**（EVIDENCE.md §1.25）：
 
-```
-TCP connect 成功 → version 交换正常（ver=3 streams=[1]）→ 我们发 verack
-→ 对端回 error: 2, "Too many connections from your IP. Closing connection."
-→ 断开 → ~90s 后重连 → 循环
-对 4 个活节点全部复现：85.114.135.102 / 194.164.163.84 /
-                       185.158.248.216:8444 / 158.69.63.42:8080
-```
+| 端 | 出口 IP | 结果 |
+|---|---|---|
+| 平板（iPhone 热点） | 运营商 NAT | ✅ 2 连接 + 2854 对象下载中 |
+| Mac（公司网 9.123.201.63） | IBM 出口 | ❌ 全部种子拒 `Too many connections from your IP`（maxout=1 也拒） |
 
-**已确认的事实**（详见 EVIDENCE.md §1.24）：
+- **客户端/协议/TLS 无问题**；被拒的是 IP（今早旧 APK 30s/轮 × 数小时的轰炸残留）
+- "同 IP 并发连接"混合键型假设**已被排除为唯一原因**（单连接也被拒）
+- 拒绝时长未知；测试工具链全部就绪（见 §4 脚本）
 
-1. 旧 APK 的 `Timeout (20s)` 症状 = TLS Purpose bug，**已修**（commit `008b9cb`，run 44464696554），新包未再出现
-2. "Too many connections from your IP" 是**对端（种子）发的 error 消息**，不是本端关闭
-3. **UDP 层与种子完全正常**（verack/addr 每 60s 一轮）——之前日志里的 `established=True` 全是 UDP 伪连接，不是 TCP
-4. **TCP 层能长期保持**（ESTABLISHED 3 分钟+），断开发生在协议层
-5. 新装 App 的 knownnodes 只有 9 个 2017 死节点 → 出站永远 SYN_SENT；DNS bootstrap 每进程只跑一次（`knownNodesActual` 逻辑）
-6. **头号嫌疑（代码级）**：`connectionpool.py addConnection()` 入站连接用混合键型——同一 IP 第一条按 `host 字符串` 存、第二条按 `Peer` 存；而 `peerValidityChecks()` 的 dup-IP 检查用 Peer 查找，且连接 accept 时就入池、version 解析后才检查 → **同一 IP 的第二条并发连接会查到它自己而被拒**。种子跑的同款 0.6.3.2 代码。两台设备 + 宿主节点共享出口 IP、maxoutboundconnections=2 都会触发
-7. 疑点未消：实验里**单连接**也被拒（对照节点 v1/v2 都复现），可能是 IP 级临时 ban（上午旧 APK 重连循环轰炸了种子几小时）
+**下一步（晚上家里，全新出口 IP）**：
 
-**下一步动作（建议顺序）**：
+1. Mac 和平板都连家里网络 → 跑 `scripts/PUBNET-TEST.md` 的 runbook
+2. Mac：`./scripts/pubnet_node.py` + `wait-conn`（家里 IP 干净应秒连）+ `create mac-test`
+3. 平板：已配置完毕（API u:p@8442、maxout=2、knownnodes=4 活节点、地址 `BM-2cU2vEDgphdWHe4Ucp1gSigCwDrJTRfyYV`），重连 USB 后 `adb forward tcp:8445 tcp:8442` 直接查状态即可；App 卡住就 force-stop 重启等 90s
+4. 双向消息（`pubnet_ctl.py send` / 平板 UI），预期 5-15 分钟
+5. **注意**：如果家里 IP 也被拒 → 说明拒绝按"客户端指纹"而非 IP（那就真要抓包了）；但热点实验已证明新 IP 可连，大概率是 IP 维度
 
-1. **换 IP 测试**（手机热点给平板或 Mac）：新 IP 上第一条连接若能建立并稳住 → IP 级状态问题；若仍被拒 → 我们握手内容有问题，抓包比对
-2. 本机 `maxoutboundconnections=1` + 单节点重试（验证混合键型理论：单连接应能过检查）
-3. 通过后：设备注入互不相同的活节点 + maxout=1 → 验证公网收发闭环
-4. 修 `class_singleCleaner` 的 memoryview/str 崩溃（崩了导致学到的节点永不落盘）
+**备用方案**（家里 IP 万一也不行）：Mac 经 `adb forward tcp:18444 tcp:8444` 直连平板节点（USB 桥，已见 verack 回包未验证完）；或两台设备各连不同热点直接对发。
 
 ---
 
@@ -73,25 +67,32 @@ TCP connect 成功 → version 交换正常（ver=3 streams=[1]）→ 我们发 
 
 ```
 branch : android-port
-HEAD   : 24aca55 + 本地未推送 commit（M3.8 打点加 host:port，纯日志改动）
+HEAD   : 91ffe30（测试工具链）+ 本次文档提交；均未推送
 remote : git@github.com:k19810703/pybitmessage-android.git
 最新CI : run 44464696554（TLS 修复包，11m07s，✅）
 ```
 
-### 设备（2026-11-19 14:20 快照）
+### 设备（2026-11-19 15:45 快照）
 
 | 设备 | 状态 | 说明 |
 |---|---|---|
-| 小米平板 5（`b45f8e87`） | **用户已断开** | 已装 TLS 修复包（个钥重签，`scripts/resign-apk.sh`）。**数据已重置**：地址变了（未记录，开机后用 `listAddresses` 查），**API 未配置**（fresh keys.dat，需重新注入 apienabled 等，注意写到 `[bitmessagesettings]` 段、不能与已有键重复，configparser 严格模式会崩） |
-| 模拟器 Pixel 6 | **已关闭**（`adb emu kill`） | TLS 修复包（CI 原签）。地址 `BM-2cUZuPZeG4Sa6vknoq9HY64AmJrRQR4CJT`，API 已配好（u:p@8442），maxoutboundconnections=2 |
+| 小米平板 5（`b45f8e87`） | **配置完毕，等晚上家里网络** | TLS 修复包（个钥签）+ API 已配（u:p@8442）+ maxout=2 + knownnodes=4 活节点；地址 `BM-2cU2vEDgphdWHe4Ucp1gSigCwDrJTRfyYV`（label `phone`）。热点实验已证明公网可连（2 连接 + 2854 对象）。回家切 Wi-Fi 后 App 自动重连；查状态需 USB 重连 + `adb forward tcp:8445 tcp:8442`；App 卡住就 force-stop 重启等 90s |
+| 模拟器 Pixel 6 | 已关闭（`adb emu kill`） | 不再需要：Mac 脚本节点替代了它的角色 |
 
-> 重新装包参考：`/tmp/apk-tls/pybitmessage-apk-25/pybitmessage-0.1.2-arm64-v8a-debug.apk`（个钥签，/tmp 可能被清，重下 run 44464696554）。
-> 平板换包用 `pm install -r -d`；以后都走个钥签，可免卸载升级。
+### 公网测试工具链（全部提交在 `scripts/`，已实测）
+
+| 脚本 | 作用 |
+|---|---|
+| `scripts/pubnet_node.py` | Mac 无头节点（TLS 开、活节点 knownnodes、API 8451、默认 maxout=1） |
+| `scripts/pubnet_ctl.py` | API 客户端：status/wait-conn/addresses/create/send/inbox/sent（`--port 8445` 操控平板） |
+| `scripts/pubnet_tablet_setup.sh` | 平板一键配置（含引号修复，实测通过；平板已配置过，勿重复跑除非重置） |
+| `scripts/build-bitmsghash-native.sh` | 本机 C PoW（已编译好 `src/bitmsghash/bitmsghash.so`；.gitignore 不入库，换机器要重跑） |
+| `scripts/PUBNET-TEST.md` | 完整 runbook（含晚上家里的流程） |
 
 ### 本机进程（已全部清理）
 
-- 桌面对照节点 `/tmp/desk_control.py` — **已 kill**（脚本保留在 /tmp，可能被清；核心逻辑：BITMESSAGE_HOME=/tmp/deskctl、TLS 开、knownnodes 写死活节点 rating=1、API 8451、`Main.daemonize = lambda self: None` 后跑 `bitmessagemain.main()`）
-- 旧 node1（/tmp/run_node.py）、两个周二遗留 kivy 进程 — **已 kill**
+- pubnet 节点、冒烟测试节点 — **已 kill**
+- 旧 node1（/tmp/run_node.py）、周二遗留 kivy 进程 — **已 kill**
 - ⚠️ pid 28249（`python3 -`，cwd `/private/tmp/bmtest`，~200% CPU，无网络）是更早 session 的测试残留，未动，可 kill
 
 ### 仓库里的脚本（持久保留）
@@ -202,7 +203,7 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 | 平板 App 有时没有 API、也没日志 | 疑似启动早期卡住 | `am force-stop` 后重新 `am start`，等 90s 再查 |
 | `THREAD-CRASH singleCleaner: memoryview ... not 'str'` | `class_singleCleaner` 还有 py3 字节问题（未修） | 不影响收发，但导致 knownnodes 永不落盘，应修 |
 | 启动崩 `DuplicateOptionError ... keys.dat` | 注入的 API 键与已有键重复（configparser 严格模式） | 注入前去重，键放 `[bitmessagesettings]` 段 |
-| 公网种子回 "Too many connections from your IP" | 见 §3：疑似 addConnection 混合键型 bug + 同 IP 并发连接 + 上午轰炸残留 | §3 下一步 1/2 |
+| 公网种子回 "Too many connections from your IP" | **已定性（EVIDENCE §1.25）**：出口 IP 粘性拒绝，今早轰炸残留；客户端无问题（热点 IP 秒连） | 换 IP；或等解封（时长未知） |
 | 对端回 `Your time is too far in the past` | 模拟器时钟漂移 | `adb root && adb shell "date -s @$(date +%s)"` |
 | 所有节点连不上 | 默认 knownnodes 是 2017 年的死节点 | 写入活节点（见 §3 列表）；注意 DNS bootstrap 每进程只跑一次 |
 | 日志里 `recv addr established=True` | **是 UDP 伪连接，不是 TCP 建立** | 判断 TCP 要看 `TCP established: host:port` 打点 |
@@ -211,10 +212,10 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ## 8. 建议的下一步（按价值排序）
 
-1. **公网连接**（§3 下一步 1/2）：换 IP（手机热点）测试 + `maxoutboundconnections=1` 单连接测试
-2. 修 `class_singleCleaner` 的 memoryview/str 崩溃（knownnodes 落盘依赖它）
-3. 推送本地 commit（M3.8 打点）并按需出包
+1. **晚上家里（新 IP）跑 `scripts/PUBNET-TEST.md`**：Mac 节点连接 + 平板状态确认 + 双向消息闭环（G3 公网版）
+2. 消息闭环通过后：推送本地 commits、更新 MILESTONES/EVIDENCE、考虑给设备默认注入活节点（避免 fresh install 的 2017 死节点 SYN_SENT 问题进产品）
+3. 修 `class_singleCleaner` 的 memoryview/str 崩溃（knownnodes 落盘依赖它）
 4. 平板横屏适配（`p4a_env_vars.txt` 里 `KIVY_ORIENTATION=Portrait` 写死，平板上是竖屏 letterbox）
 5. UI 补发送进度（把 `doingpubkeypow/awaitingpubkey/msgsent` 映射成中文）
 
-**如果演示时间紧**：两台设备连同一 Wi-Fi，直接互连（不依赖公网种子），这条路已经验证能通，`extralowdifficulty=true` 时秒级。
+**如果演示时间紧**：两台设备连同一 Wi-Fi，直接互连（不依赖公网种子），这条路已经验证能通，`extralowdifficulty=true` 时秒级；或两台设备各连不同手机热点走公网（热点实验已证明可行）。
