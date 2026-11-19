@@ -133,7 +133,9 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
                 'Received command %s before connection was fully'
                 ' established, ignoring', self.command)
             self.invalid = True
-        print('BMPROTO recv %s established=%s' % (
+        print('BMPROTO %s:%s recv %s established=%s' % (
+            getattr(self.destination, 'host', '?'),
+            getattr(self.destination, 'port', '?'),
             self.command, self.fullyEstablished), flush=True)
         if not self.invalid:
             try:
@@ -554,13 +556,15 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
         to the main connection phase. If not sent verack yet,
         continue processing.
         """
-        print('BMPROTO verack received (verackSent=%s)' % self.verackSent,
-              flush=True)
+        print('BMPROTO %s:%s verack received (verackSent=%s)' % (
+            self.destination.host, self.destination.port,
+            self.verackSent), flush=True)
         self.verackReceived = True
         if not self.verackSent:
             return True
-        print('BMPROTO verack -> established (isSSL=%s)' % self.isSSL,
-              flush=True)
+        print('BMPROTO %s:%s verack -> established (isSSL=%s)' % (
+            self.destination.host, self.destination.port, self.isSSL),
+            flush=True)
         self.set_state(
             "tls_init" if self.isSSL else "connection_fully_established",
             length=self.payloadLength, expectBytes=0)
@@ -587,7 +591,8 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
             self.destination.host, self.peerNode.port)
         logger.debug('user agent: %s', self.userAgent)
         logger.debug('streams: [%s]', ','.join(map(str, self.streams)))
-        print('BMPROTO version parsed: ver=%s streams=%r timeOffset=%s' % (
+        print('BMPROTO %s:%s version parsed: ver=%s streams=%r timeOffset=%s' % (
+            self.destination.host, self.destination.port,
             self.remoteProtocolVersion, self.streams, self.timeOffset),
             flush=True)
         try:
@@ -604,7 +609,9 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
             return True
         self.append_write_buf(protocol.CreatePacket('verack'))
         self.verackSent = True
-        print('BMPROTO sent verack (outbound=%s)' % self.isOutbound, flush=True)
+        print('BMPROTO %s:%s sent verack (outbound=%s)' % (
+            self.destination.host, self.destination.port, self.isOutbound),
+            flush=True)
         if isinstance(self.userAgent, (bytes, bytearray)):
             # decoded payload fields are bytes on py3; re needs str
             self.userAgent = self.userAgent.decode('ascii', 'replace')

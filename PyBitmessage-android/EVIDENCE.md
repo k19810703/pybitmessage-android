@@ -488,6 +488,54 @@ RESULT: B1 设备↔宿主 双向 OK ✅
 | 重发 pubkey 窗口 | **28 天** | 对端错过一次公告就再也拿不到公钥（日志：`we already sent it recently. Ignoring request`） | `pubkeyresendwindow`，默认 **1 小时** |
 | awaitingpubkey 的 `sleeptill` | `TTL*1.1` ≈ **2.7 天** | 消息卡死在队列里 | 上限 **30 分钟** |
 
+### 1.24 M3.8 · 公网断连根因调查（2026-11-19 14:20，暂停点）
+
+**一句话**：TLS 修复包（run 44464696554）装上后，公网 TCP 握手到 version/verack 一切正常，但**所有已知活节点都在 version 交换后回 `error: 2 "Too many connections from your IP"`**；同时找到一个可疑的上游 bug（入站连接字典的混合键型），它能让"同一 IP 的第二条并发连接"必然被拒。
+
+**实验设置**（只保留 Mac 一个节点在发连接，平板已断开、模拟器已 force-stop、旧 node1/遗留 kivy 进程已杀）：
+
+```
+桌面对照节点: /tmp/desk_control.py（TLS 开、knownnodes 写死 4 个活节点、rating=1）
+4 个活节点:   85.114.135.102:8444 / 194.164.163.84:8444 /
+             185.158.248.216:8444 / 158.69.63.42:8080
+             （dig bootstrap8444/8080.bitmessage.org + nc -z 验活）
+```
+
+**观察到的循环**（每 ~90 秒一轮，对 4 个节点全部复现）：
+
+```
+TCP connect 成功（lsof 可见 ESTABLISHED）
+→ 我们发 version → 对端回 version（version parsed: ver=3 streams=[1] ✓）
+→ 我们发 verack
+→ 对端回 error: 2, "Too many connections from your IP. Closing connection."
+→ 连接关闭 → 重连 → 循环
+```
+
+**同时确认的事实**：
+
+| # | 事实 | 证据 |
+|---|---|---|
+| 1 | 旧 APK 的 `Timeout (20s)` 症状 = TLS Purpose bug（已修，commit 008b9cb），装新包后未再出现 | 平板旧进程死前 13:52:42 一批 Timeout；新包日志无 |
+| 2 | **"Too many connections from your IP" 是对端（种子）主动发的 error 消息**，不是本端行为 | `bm_command_error` 日志，带 host:port |
+| 3 | UDP 层与种子完全正常（verack/addr 每 60 秒一轮） | `BMPROTO <seed> recv addr established=True`（UDP 伪连接，fullyEstablished 恒为 True） |
+| 4 | **TCP 层能长期保持**（ESTABLISHED 3 分钟以上），断开发生在协议层 | lsof 连续 6×30s 观察 |
+| 5 | 新装的 App（knownnodes=9 个 2017 死节点）会永远对死 IP 发 SYN_SENT；DNS bootstrap 只在 knownnodes 为空/全默认时跑一次 | netstat 全是 SYN_SENT；knownnodes.py `knownNodesActual` 逻辑 |
+| 6 | 模拟器/新装设备上 **0 次 TCP established**，之前看到的 `established=True` 全是 UDP | 打点加 host:port 后区分（本地 commit，见下） |
+| 7 | 种子的拒绝在**只有 Mac 一个节点、单次连接**时也出现 | 对照节点 v1（单节点、maxout=2）与 v2（4 节点）都复现 |
+
+**可疑根因（代码级，未最终确认）**：`connectionpool.py addConnection()` 对入站连接用**混合键型**——同一 IP 的第一条入站按 `host 字符串` 存，第二条按 `Peer(ip, port)` 存。而 `bmproto.py peerValidityChecks()` 的 dup-IP 检查是 `inboundConnections.get(self.destination)`（Peer 查找）。连接在 **accept 时**就 addConnection，version 解析**之后**才做检查 → 第二条并发连接的 `get(Peer(...))` 会查到**它自己** → 必然回 "Too many connections from your IP"。种子跑的也是 0.6.3.2 同款代码。**推论**：同一 IP 同时开 ≥2 条连接（我们的 maxoutboundconnections=2、两台设备+宿主节点共享出口 IP）就会触发；单条不应触发——但实验 7 里单连接也被拒，说明还有未解因素（见下一步）。
+
+**下一步（按优先级）**：
+
+1. **换 IP 测试**（手机热点）：若新 IP 上第一条连接能建立并稳住 → 证实是 IP 级状态（临时 ban 或并发键型 bug 的历史残留）；若仍被拒 → 我们的握手内容有问题，需抓包比对正常客户端
+2. `maxoutboundconnections=1` + 单节点重试（本机即可做，验证混合键型理论：单连接应能过 dup-IP 检查）
+3. 若 2 通过：给设备注入互不相同的活节点 + maxout=1，验证公网收发
+4. 修 `class_singleCleaner` 的 memoryview/str 崩溃（它负责 `cleanupKnownNodes`/`saveKnownNodes`，崩了导致学到的节点永不落盘）
+
+**本地未推送的 commit**：`M3.8: tag BMPROTO handshake diagnostics with peer host:port`（bmproto.py 四处打点加了 destination，纯日志改动）。
+
+**遗留进程提醒**：pid 28249（`python3 -`，cwd `/private/tmp/bmtest`，~200% CPU，无网络 socket）是更早 session 的 CPU 测试残留，本次未动，可按需 kill。
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
