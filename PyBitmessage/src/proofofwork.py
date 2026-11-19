@@ -5,6 +5,7 @@ Proof of work calculation
 
 import ctypes
 import hashlib
+import io
 import os
 import subprocess  # nosec B404
 import sys
@@ -46,8 +47,9 @@ class LogOutput(object):  # pylint: disable=too-few-public-methods
             sys.stdout.flush()
             self._stdout = sys.stdout
             self._stdout_fno = os.dup(sys.stdout.fileno())
-        except AttributeError:
-            # NullWriter instance has no attribute 'fileno' on Windows
+        except (AttributeError, OSError, ValueError, io.UnsupportedOperation):
+            # Android's stdout is a NullWriter-like object without fileno();
+            # Windows NullWriter lacks it too. Just skip the redirection.
             self._stdout = None
         else:
             self._dst, self._filepath = tempfile.mkstemp()

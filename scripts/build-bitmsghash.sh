@@ -36,7 +36,10 @@ trap 'rm -rf "$TMP"' EXIT
 
 "$CXX" --target=$TARGET -O3 -fPIC -I"$SRC/shim" -c "$SRC/bitmsghash.cpp" -o "$TMP/bm.o"
 "$CC"  --target=$TARGET -O3 -fPIC -I"$SRC/shim" -c "$SRC/shim/sha512_shim.c" -o "$TMP/sha.o"
-"$CXX" --target=$TARGET -shared -o "$TMP/libbitmsghash.so" "$TMP/bm.o" "$TMP/sha.o" -pthread
+# -static-libstdc++: the APK does not ship libc++_shared.so, and dlopen
+# refuses to load a library whose dependencies are missing.
+"$CXX" --target=$TARGET -shared -static-libstdc++ -o "$TMP/libbitmsghash.so" \
+    "$TMP/bm.o" "$TMP/sha.o"
 
 mkdir -p "$OUT"
 cp "$TMP/libbitmsghash.so" "$OUT/libbitmsghash.so"
