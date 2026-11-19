@@ -136,7 +136,18 @@ class NavigateApp(MDApp):
                 )
             )
         Window.bind(on_request_close=self.on_request_close)
-        return Builder.load_file(os.path.join(os.path.dirname(__file__), 'main.kv'))
+        root = Builder.load_file(
+            os.path.join(os.path.dirname(__file__), 'main.kv'))
+        # Demo entry point: the simple Chinese messaging screen is what the
+        # Android build shows on start. The original screens stay registered.
+        try:
+            from bitmessagekivy.messaging import MessagingScreen
+            manager = root.ids.scr_mngr
+            manager.add_widget(MessagingScreen(name='messaging'))
+            manager.current = 'messaging'
+        except Exception as exc:  # noqa: BLE001 - never block startup
+            print('MESSAGING screen failed to load: %r' % (exc,), flush=True)
+        return root
 
     def set_screen(self, screen_name):
         """Set the screen name when navigate to other screens"""

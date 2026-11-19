@@ -122,15 +122,13 @@ def main():
     # encrypted. Re-enable once the certs are generated at build time.
     state.disable_tls = True
 
-    # There is no C PoW build for Android yet, so the pure-Python
-    # implementation needs ~10 minutes per object at the default difficulty.
-    # Default mobile builds onto the low-difficulty profile; users can turn it
-    # off by setting extralowdifficulty = false in keys.dat.
+    # The C PoW library (libbitmsghash.so) makes protocol-default difficulty
+    # fast enough (~4s per object), so do not lower it: public peers clamp the
+    # difficulty up and would drop low-PoW objects.
     from bmconfigparser import config
-    if not config.has_option('bitmessagesettings', 'extralowdifficulty'):
-        config.set('bitmessagesettings', 'extralowdifficulty', 'true')
-        config.save()
-        print('POW: defaulting to extralowdifficulty on Android', flush=True)
+    if config.safeGetBoolean('bitmessagesettings', 'extralowdifficulty'):
+        print('POW: extralowdifficulty is on; messages may be dropped by '
+              'public peers', flush=True)
 
     alias_core_modules()
     bitmessagemain.main()
