@@ -28,6 +28,7 @@
 | 文件 | 作用 | 说明 |
 |---|---|---|
 | `PyBitmessage-android/MILESTONES.md` | **任务与验收的唯一事实来源** | 36 个任务（M2.1.1 … M5.4.2），每条带预估与 L/F/A/S/T 验收 |
+| `PyBitmessage-android/HANDOFF.md` | **交接单：当前状态、环境、卡点、下一步** | 新 session 先读这份 |
 | `PyBitmessage-android/EVIDENCE.md` | 验收证据流水 | 每个任务完成/失败都追加一条，含命令输出、截图路径 |
 | `PyBitmessage-android/PLAN.md` | 方案、环境体检、CI 踩坑 | §5 本机/容器环境；**§7.5 七轮 CI 失败-修复记录** |
 | `PyBitmessage/`（代码） | 被改造的代码本体 | 就是本仓库的子目录，不再是独立 clone |
@@ -334,4 +335,5 @@ adb shell pm clear at.bitmessage.pybitmessage
 | 2026-11-18 | v2.6 | **M3 协议层打通**：双向加密消息成功；修掉 15 处 py3 str/bytes 断点 |
 | 2026-11-18 | v2.7 | 设备侧排查：签名导致换包失败、PoW 慢、API 端口撞车（一次自发自收的误判已更正） |
 | 2026-11-18 | v2.8 | **设备↔宿主双向加密消息打通**（G3 B1/B2/B3 达成） |
+| 2026-11-19 | v3.1 | C 版 PoW（3.9s）、中文界面、TLS 修复；新增 `HANDOFF.md` 交接单 |
 | 2026-11-19 | v3.0 | 实测发现公网难度钳制 + 设备 PoW >15 分钟；重排路线：M3.7 PoW → M3.8 公网 → M3.9 UI |
