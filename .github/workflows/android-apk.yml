@@ -97,6 +97,20 @@ jobs:
           restore-keys: |
             p4a-v3-${{ runner.os }}-
 
+      # The ctypes PoW accelerator must exist before buildozer packages the
+      # APK (android.add_libs_arm64_v8a). The NDK comes from the cached
+      # buildozer toolchain; on a cold cache this is skipped and the app falls
+      # back to the (slow) pure-Python PoW.
+      - name: Build C PoW library (arm64)
+        run: |
+          NDK=$(ls -d "$HOME"/.buildozer/android/platform/android-ndk-* 2>/dev/null | head -1 || true)
+          if [ -z "$NDK" ]; then
+            echo "NDK not cached yet - skipping C PoW library"
+            exit 0
+          fi
+          echo "using NDK: $NDK"
+          bash ../scripts/build-bitmsghash.sh "$NDK"
+
       - name: Build debug APK
         working-directory: PyBitmessage/packages/android
         run: |

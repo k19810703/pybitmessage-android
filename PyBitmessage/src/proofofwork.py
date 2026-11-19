@@ -386,21 +386,34 @@ def init():
         except Exception as e:
             logger.error('Error: %s', e, exc_info=True)
     else:
-        try:
-            bso = ctypes.CDLL(
-                os.path.join(paths.codePath(), 'bitmsghash', BITMSGLIB))
-        except OSError:
-            import glob
+        bso = None
+        if 'ANDROID_ARGUMENT' in os.environ:
+            # libbitmsghash.so is packaged in the APK's lib/<abi>/ directory;
+            # dlopen by name resolves it through the app's native lib path
+            # (loading a .so from app data is blocked on Android 10+).
             try:
-                bso = ctypes.CDLL(glob.glob(os.path.join(
-                    paths.codePath(), 'bitmsghash', 'bitmsghash*.so'
-                ))[0])
-            except (OSError, IndexError):
-                bso = None
-        except Exception:
-            bso = None
+                bso = ctypes.CDLL('libbitmsghash.so')
+                logger.info('Loaded C PoW library from the APK lib dir')
+            except OSError as err:
+                logger.info('No C PoW library in the APK lib dir: %s', err)
+        if bso is not None:
+            pass
         else:
-            logger.info('Loaded C PoW DLL %s', BITMSGLIB)
+            try:
+                bso = ctypes.CDLL(
+                    os.path.join(paths.codePath(), 'bitmsghash', BITMSGLIB))
+            except OSError:
+                import glob
+                try:
+                    bso = ctypes.CDLL(glob.glob(os.path.join(
+                        paths.codePath(), 'bitmsghash', 'bitmsghash*.so'
+                    ))[0])
+                except (OSError, IndexError):
+                    bso = None
+            except Exception:
+                bso = None
+            else:
+                logger.info('Loaded C PoW DLL %s', BITMSGLIB)
         if bso:
             try:
                 BMPOW = bso.BitmessagePOW
