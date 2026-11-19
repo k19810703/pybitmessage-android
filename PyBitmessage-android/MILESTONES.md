@@ -493,7 +493,7 @@ M6（中文 + 平板）与 M3.9 并行，M5 之前完成
 |---|---|---|---|
 | M3.7.1 | p4a 编出 `libcrypto`（requirements 加 `openssl`），确认 `libcrypto1.1.so` 随包 | 3h | **L**：`PROBE openssl_runtime = OK` |
 | M3.7.2 | 把 `src/bitmsghash` 编成 `_bitmsghash*.so`（p4a recipe 或 `android.add_src`），`proofofwork.BMPOW` 可用 | 6h | **L**：启动日志 `BMPOW enabled`；`import bitmsghash` 成功 |
-| M3.7.3 | 难度恢复默认（去掉 `extralowdifficulty` 默认值），测两块设备 | 2h | **T**：平板建地址 ≤15s；一条消息 PoW ≤15s |
+| M3.7.3 ✅ | 难度恢复默认（去掉 `extralowdifficulty` 默认值），测两块设备 | 2h | **T**：平板建地址 PoW **3.9s**（实测，见 EVIDENCE §1.22） |
 
 ### 13.4 M3.8 · 公网基线
 

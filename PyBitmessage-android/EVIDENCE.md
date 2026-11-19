@@ -436,6 +436,35 @@ RESULT: B1 设备↔宿主 双向 OK ✅
 **这一轮又修掉 2 个接收端字节问题**（commit `173df0f`）：
 `helper_bitcoin` testnet 前缀、`class_objectProcessor.ackDataHasValidHeader` 的命令比较。
 
+### 1.22 ✅ M3.7 · C 版 PoW 打通（2026-11-19 10:39）
+
+**平板（小米平板 5 / 骁龙 855）实测，协议默认难度：**
+
+```
+10:39:34.357  (For pubkey message) Doing proof of work...  TTL set to 2419427
+10:39:38.276  (For pubkey message) Found proof of work 9495648398  Nonce: 22160074
+→ 单个对象 3.9 秒
+```
+
+对比纯 Python：同一设备 >15 分钟未完成。**约 230 倍提速**。
+
+**做法**（`scripts/build-bitmsghash.sh`）
+
+1. `bitmsghash` 本来是 ctypes 加载的普通 `.so`，上游用 OpenSSL 的 SHA-512；
+   NDK 没有 `openssl/sha.h`，于是自带一份自足实现的 SHA-512 shim
+   （`src/bitmsghash/shim/`，与 hashlib 的三组向量逐字节一致）
+2. NDK clang++ 交叉编译 → `libbitmsghash.so`，经 `android.add_libs_arm64_v8a` 进 APK
+3. `-static-libstdc++`：APK 不带 `libc++_shared.so`，否则 dlopen 直接失败
+4. 运行时 `ctypes.CDLL('libbitmsghash.so')`（Android 10+ 禁止从应用数据目录 dlopen）
+
+**踩到的坑**
+
+| 现象 | 根因 |
+|---|---|
+| `library "libc++_shared.so" not found` | 忘了静态链接 libc++ |
+| `io.UnsupportedOperation: fileno` | `LogOutput()` 假设 stdout 有 fileno，Android 上不是 |
+| APK 里没有 .so | `android.add_libs_arm64_v8a` 后面跟了缩进注释，被当作续行吞掉 |
+
 ### 1.5 已知遗留（记入 M2.6，不阻塞 G2.3）
 
 Kivy 各屏用 `from pybitmessage import state`（指向镜像副本），而核心用 `import state`（根目录原版）。APK 里这是**两个模块对象**，会导致 M2.6 "UI 显示真实连接数/地址"时读到另一份全局变量。M2.6 必须统一（方案：改 `import state`，或构建期给 `pybitmessage.*` 做模块别名）。
