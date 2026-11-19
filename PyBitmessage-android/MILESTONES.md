@@ -499,10 +499,10 @@ M6（中文 + 平板）与 M3.9 并行，M5 之前完成
 
 | ID | 任务 | 验收 |
 |---|---|---|
-| M3.8.1 | 恢复协议默认难度，确认被公网节点接受 | **A**：对端不再回 `insufficient PoW` |
-| M3.8.2 | 种子与发现：DNS 种子 + 首启拉活节点；调 `maxoutbound`，避免 `Too many connections from your IP` | **A**：`networkConnections ≥ 2` 持续 10 分钟 |
-| M3.8.3 | 传输层取舍：补 `sslkeys`（TLS）或明确保持明文并记录风险 | **L**：连接 `isSSL` 符合预期 |
-| M3.8.4 | 公网双向联调（两台真实设备） | **T**：A→B、B→A 各 1 条 ≤60s；**A**：收件箱对得上 |
+| M3.8.1 ✅ | 恢复协议默认难度，确认被公网节点接受 | **A**：对端不再回 `insufficient PoW`（公网收发全程默认难度，EVIDENCE §1.26） |
+| M3.8.2 ✅ | 种子与发现：DNS 种子 + 首启拉活节点；调 `maxoutbound`，避免 `Too many connections from your IP` | **A**：`networkConnections ≥ 2` 持续 10 分钟（平板热点/家 Wi-Fi 均达成；`Too many connections` 证实为瞬时状态，重试自穿透） |
+| M3.8.3 ✅ | 传输层取舍：补 `sslkeys`（TLS）或明确保持明文并记录风险 | **L**：TLS Purpose 修复（commit `008b9cb`）后公网 TLS 连接建立（EVIDENCE §1.24–1.26） |
+| M3.8.4 ◐ | 公网双向联调（两台真实设备） | 2026-11-19 双向 + 双向 ack 全通（EVIDENCE §1.26，Mac 脚本节点↔平板）；**差距**：延迟为分钟级非 ≤60s、平板↔平板未测、卡点见 HANDOFF §3 观察项（skipUntil 吞 getdata 等） |
 
 ### 13.5 M3.9 · UI 收发（用户可见的核心）
 
