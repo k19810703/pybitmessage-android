@@ -277,8 +277,11 @@ p4a.branch = v2024.01.21
 
 # (str) Filename to the hook for p4a
 # M4.1c: injects android:foregroundServiceType on the keep-alive service.
-# Path is relative to the directory buildozer runs in (PyBitmessage/).
-p4a.hook = packages/android/p4a_hook.py
+# buildozer already prefixes this with the spec's own directory
+# (packages/android/), so a bare filename is correct here -- writing
+# "packages/android/p4a_hook.py" double-prefixed it and broke the build
+# (run 44658662598).
+p4a.hook = p4a_hook.py
 
 # (str) Bootstrap to use for android builds
 # p4a.bootstrap = sdl2
