@@ -295,6 +295,23 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |
 | M4.7.1 | 电量策略（仅 Wi-Fi/充电同步） | 设置项 + 网络策略 | 4h | **T**：1 小时后台耗电 ≤ 8%（C3） |
 
+### 7.0 M4.8 · 已观测缺陷收编（2026-11-20 新增）
+
+> **背景**：2026-11-19 公网联调中实测到 5 个缺陷，此前只在 `HANDOFF.md` 的"观察项"
+> 里口头记录，**没有任务 ID、没有验收标准、没有归属阶段**。本节把它们正式立项。
+> 新增规则的执行情况记录在这里，便于回溯"哪些已知问题有计划"。
+
+| ID | 缺陷 | 实测现象 | 修复方向 | 验收 | 归属 | 优先级 |
+|---|---|---|---|---|---|---|
+| **M4.8.1** | `singleCleaner` 崩溃（py3 bytes/str） | `THREAD-CRASH singleCleaner: TypeError("memoryview: a bytes-like object is required, not 'str'")`；`class_singleCleaner.py:71 state.Inventory.flush()` → `storage/sqlite.py:122 sqlite3.Binary(value.tag)` | `value.tag` 是 str，入库前 `.encode()` | **L**：运行 1 小时 `logcat` 无 `THREAD-CRASH singleCleaner`；**F**：`knownnodes.dat` 的 mtime 随运行更新 | M4.4（持久化） | **高**（knownnodes 永不落盘的根因） |
+| **M4.8.2** | `skipUntil` 反交集防御吞 getdata | 平板/节点收到 `inv` 后发 `getdata`，本端因 `now < self.skipUntil` 直接忽略，对象永不发出；实测 3 条消息卡 `msgsent` 未送达 | 全量同步期间应豁免本地生成对象；或对 `getdata` 排队延后而非丢弃 | **T**：新对象在新地址间的送达时间 P95 ≤ 5 分钟（当前部分消息永不送达） | M3.8.4 + M4.3 | **高**（直接决定"消息能不能到"） |
+| **M4.8.3** | SIGTERM 优雅关闭挂死 | 节点收到 SIGTERM 后 API 已死但进程与 `singleton.lock` 仍在，新实例报 "Another instance is already running" | 关闭流程加超时强制退出；启动时检测陈旧锁 | **F**：`kill` 后 10 秒内进程消失且锁文件被清理；新实例可正常启动 | M4.6（崩溃自恢复） | 中 |
+| **M4.8.4** | `networkConnections` 计数失真 | `clientStatus` 报 1，`lsof` 实际 5 条 ESTABLISHED | 核对计数来源（`connectionpool.outboundConnections` vs 实际 channel） | **A**：`clientStatus.networkConnections` 与 `netstat` 的 ESTABLISHED 数差 ≤ 1 | M3.8.4 | 低（不影响功能，影响诊断） |
+| **M4.8.5** | `doingmsgpow` 偶发卡 5 分钟 | 平板第 2 条消息 `doingmsgpow` 持续 5+ 分钟未推进（第 1 条正常，C PoW 单对象 ~4s） | 查 `class_singleWorker` 的队列/`sleeptill` 逻辑 | **T**：连续发 5 条，每条 `doingmsgpow` ≤ 30 秒 | M3.4 | 中 |
+
+**状态**：全部 ⬜ 未开始。M4.8.1 / M4.8.3 建议随 M4.4、M4.6 一起做；
+M4.8.2 建议在 M4.3（保活）验证同期处理，因为它与"消息能否到达"直接相关。
+
 > **Gate G4（阶段出口）**：C1–C4
 > - C1 锁屏 30 分钟仍能收消息（S）
 > - C2 强杀重启数据完整（F）
@@ -438,6 +455,10 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | R6 | 厂商 ROM 杀后台 | M4.1 | 高 | 收不到消息 | 前台服务 + 白名单引导 |
 | R7 | 无私钥加密导致泄露 | M4.5 | 中 | 身份被盗 | Keystore + 禁备份 |
 | R8 | 模拟器网络与真机不一致 | M3.6 | 中 | 联调失败 | 至少一台真机参与 |
+| R9 | 公网对象传播被 `skipUntil` 吞掉，消息"发了但永不送达" | M3.8.4 / M4.3 | **高（已发生）** | 用户认为消息丢了 | **M4.8.2** |
+| R10 | `singleCleaner` 崩溃导致 knownnodes 永不落盘（学到的节点每次重启丢失） | M4.4 | **高（已发生）** | 每次重启重新抽签连节点，可用性差 | **M4.8.1** |
+| R11 | SIGTERM 优雅关闭挂死，留下僵尸进程 + 陈旧单实例锁 | M4.6 | 中（已发生） | 升级/重启后 App 起不来 | **M4.8.3** |
+| R12 | 厂商 ROM 灭屏即冻结（MIUI 实测），前台服务也未必够 | M4.1/M4.3 | **高（已发生）** | 锁屏收不到 = D5 不过 | M4.1 前台服务 + M4.3 WakeLock/Doze 白名单 |
 
 ---
 

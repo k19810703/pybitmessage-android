@@ -94,10 +94,16 @@ dup-IP 检查），重试抽签几分钟内自然穿透（同节点 19:46 拒、
 **注意**：平板当前跑的是**热补丁版**（dandelion.py、api.py 直接推进 `files/app/`），
 下次出包装机自然替换；热补丁方法见 AGENTS §6.7。平板 keys.dat 现为 `dandelion = 0`。
 
-**仍未修的观察项**：singleCleaner memoryview 崩溃（knownnodes 落盘依赖它）、MIUI 锁屏
-冻结 App（**演示必须亮屏**：`svc power stayon usb`）、networkConnections 计数失真、
-SIGTERM 优雅关闭挂死（重启 Mac 节点需 `kill -9` + 删 `/tmp/pubnet/singleton.lock`）、
-平板第二条消息 doingmsgpow 卡 5 分钟（未查）。
+**仍未修的观察项 → 已全部收编为 MILESTONES §7.0 的 M4.8.x 任务**（2026-11-20）：
+
+| 观察项 | 任务 ID |
+|---|---|
+| `singleCleaner` memoryview 崩溃（knownnodes 不落盘） | **M4.8.1** |
+| `skipUntil` 吞 getdata（消息发出去永不送达） | **M4.8.2** |
+| SIGTERM 优雅关闭挂死 + 陈旧单实例锁 | **M4.8.3** |
+| `networkConnections` 计数失真 | **M4.8.4** |
+| 平板 `doingmsgpow` 偶发卡 5 分钟 | **M4.8.5** |
+| MIUI 锁屏冻结 App（**演示必须亮屏**：`svc power stayon usb`） | M4.1 + M4.3 + 风险 R12 |
 
 ---
 
