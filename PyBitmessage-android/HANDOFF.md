@@ -233,6 +233,7 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 | 现象 | 原因 | 对策 |
 |---|---|---|
+| **🚨 地址/私钥突然没了、收件箱空了** | 误跑 `adb shell pm clear at.bitmessage.pybitmessage` —— **会连 `keys.dat` 一起清掉，私钥不可恢复**（2026-11-20 真实发生过一次） | **永远不要对装机设备跑 `pm clear`**；要"干净重来"只在模拟器上做。做实验前先 `adb exec-out run-as <pkg> cat files/bitmessage/messages.dat > /tmp/backup.dat` 备份 |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 每次 CI 构建签名不同 | 先卸载，或 `scripts/resign-apk.sh` 重签（个钥在 `~/.pybitmessage-android/`，12:34 前装的包是 CI 原签，升级需先卸载一次） |
 | MIUI 报 `INSTALL_FAILED_USER_RESTRICTED` | HyperOS 拦 `adb install` | `adb push` + `pm install -r -d` |
 | API 打到 8442 却操作到别的节点 | 宿主节点也占了 8442 | 宿主 API 必须换端口（8451/38681 都用过），设备用 8445 |

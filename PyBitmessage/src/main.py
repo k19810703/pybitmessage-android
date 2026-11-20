@@ -185,29 +185,48 @@ def start_keepalive_service():
         print('SERVICE start failed: %r' % (exc,), flush=True)
 
 
-def start_doze_keepalive():
-    """Hold a partial wake lock while the screen is off (M4.3).
+def schedule_android_keepalive(delay=8.0):
+    """Set up wake lock + start the keep-alive service, shortly after the UI.
 
-    The Bitmessage core lives in this (UI) process, so when the device
-    dozes the socket threads stop being scheduled and every peer times out.
-    A partial wake lock keeps the CPU on; the service started above keeps
-    the *process* from being reaped. Both are needed for acceptance D5
-    ("30 minutes locked, still receiving").
+    Two constraints learned the hard way on the device:
+
+    * Running this inline before ``bitmessagemain.main()`` crashed the app
+      with "JNI DETECTED ERROR ... jclass is an invalid JNI transition frame
+      reference ... from SDLActivity.nativeRunMain" -- the service process
+      was forked while the main process was still initialising SDL.
+    * Running it in a worker *thread* then failed differently: autoclass()
+      could not resolve our service class ("ClassNotFoundException") because
+      the thread had no valid JNI class loader.
+
+    So: schedule through Kivy's Clock, which fires on the main thread once
+    the event loop is running. Everything is best-effort and logged.
     """
     if os.environ.get('ANDROID_ARGUMENT') is None:
-        return  # desktop run
-    try:
-        import android_keepalive
+        return
 
-        if android_keepalive.install():
-            print('KEEPALIVE active: %s' % android_keepalive.status(),
-                  flush=True)
-        else:
-            print('KEEPALIVE: not active', flush=True)
-        # Ask once per launch; the result is sticky in the system UI.
-        android_keepalive.request_battery_optimisation_exemption()
-    except Exception as exc:  # noqa: BLE001 - never block startup
-        print('KEEPALIVE setup failed: %r' % (exc,), flush=True)
+    def _setup(_dt):
+        try:
+            import android_keepalive
+            if android_keepalive.install():
+                print('KEEPALIVE active: %s' % android_keepalive.status(),
+                      flush=True)
+            else:
+                print('KEEPALIVE: not active', flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print('KEEPALIVE setup failed: %r' % (exc,), flush=True)
+        try:
+            start_keepalive_service()
+        except Exception as exc:  # noqa: BLE001
+            print('SERVICE delayed start failed: %r' % (exc,), flush=True)
+
+    try:
+        from kivy.clock import Clock
+        Clock.schedule_once(_setup, delay)
+        print('KEEPALIVE scheduled in %ss (main thread)' % delay, flush=True)
+    except Exception as exc:  # noqa: BLE001 - no Kivy: try once inline
+        print('KEEPALIVE: Clock unavailable (%r), running inline'
+              % (exc,), flush=True)
+        _setup(0)
 
 
 def main():
@@ -242,8 +261,7 @@ def main():
               'public peers', flush=True)
 
     alias_core_modules()
-    start_keepalive_service()
-    start_doze_keepalive()
+    schedule_android_keepalive()
     bitmessagemain.main()
 
 

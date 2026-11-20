@@ -51,8 +51,15 @@ def acquire_wake_lock():
     """Take a partial wake lock (CPU stays on; the screen may still sleep)."""
     global _wake_lock
     activity, context = _android()
-    if context is None or _wake_lock is not None:
+    if context is None:
         return False
+    # Guard against double-acquire: an unreleased lock is counted by the
+    # system each time (the device showed 17 entries for our tag).
+    try:
+        if _wake_lock is not None and _wake_lock.isHeld():
+            return True
+    except Exception:  # noqa: BLE001
+        pass
     try:
         from jnius import autoclass, cast
 
@@ -151,46 +158,24 @@ def request_battery_optimisation_exemption(force=False):
 
 
 def install():
-    """Wire the wake lock to screen on/off; call once at startup."""
+    """Acquire the wake lock and offer the battery exemption.
+
+    Deliberately does NOT register a BroadcastReceiver for SCREEN_ON/OFF.
+    A Python-implemented receiver appended to the app's Java class table
+    crashed the process outright:
+
+        JNI DETECTED ERROR IN APPLICATION: jclass is an invalid JNI
+        transition frame reference ... from SDLActivity.nativeRunMain
+
+    The wake lock is taken once and held for the process lifetime, which is
+    what actually keeps the sockets scheduled; releasing it on screen-on
+    only saves a little battery and is not worth a crash. Energy usage is
+    measured separately in M4.7.1.
+    """
     activity, _ = _android()
     if activity is None:
         return False
-    if not acquire_wake_lock():
-        return False
-    try:
-        from jnius import JavaClass, autoclass, java_method
-
-        # BroadcastReceiver is an abstract *class* in Android, not an
-        # interface: declaring it in __javainterfaces__ is rejected with
-        # "android.content.BroadcastReceiver is not an interface". JavaClass
-        # (class inheritance) is the correct wrapper. A plain Python func
-        # cannot be a receiver without pyjnius' activity-broadcast helpers,
-        # so this is best-effort: the wake lock above already does the
-        # heavy lifting and is held for the whole app lifetime.
-        class ScreenReceiver(JavaClass):
-            __javaclass__ = 'android/content/BroadcastReceiver'
-
-            @java_method('(Landroid/content/Context;Landroid/content/Intent;)V')
-            def onReceive(self, context, intent):
-                action = intent.getAction()
-                if action == 'android.intent.action.SCREEN_OFF':
-                    acquire_wake_lock()
-                elif action == 'android.intent.action.SCREEN_ON':
-                    release_wake_lock()
-
-        IntentFilter = autoclass('android.content.IntentFilter')
-        filter_ = IntentFilter()
-        filter_.addAction('android.intent.action.SCREEN_OFF')
-        filter_.addAction('android.intent.action.SCREEN_ON')
-        activity.registerReceiver(ScreenReceiver(), filter_)
-        print('KEEPALIVE: screen receiver registered', flush=True)
-        return True
-    except Exception as exc:  # noqa: BLE001
-        # The wake lock alone is what keeps us alive; a receiver that cannot
-        # be registered must not take the app down with it.
-        print('KEEPALIVE: screen receiver unavailable (%r); wake lock stays '
-              'held for the process lifetime' % (exc,), flush=True)
-        return True
+    return acquire_wake_lock()
 
 
 _last_touch = time.time()

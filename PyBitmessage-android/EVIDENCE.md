@@ -559,6 +559,48 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.32 M3.9.1 修复：菜单里的 Inbox 永远是空的（2026-11-20 12:55）
+
+**用户报告**：打开抽屉菜单 → Inbox，里面什么都没有（但主界面能显示消息）。
+
+**根因**（上游遗留 bug）：
+
+```python
+# baseclass/inbox.py，修复前
+def loadMessagelist(self, where="", what=""):
+    """Load inbox messages"""
+    self.set_default_address()
+    self.account = self.kivy_state.selected_address
+    # ← 函数到此结束，从未查询数据库，MDList 永远是空的
+```
+
+`kv/inbox.kv` 里的 `MDList(id=ml)` 没有任何数据绑定。主界面（`messaging.py`）
+之所以能显示，是因为它自己在 `refresh_inbox()` 里直接 `sqlQuery`。
+
+**修复**：
+
+1. `loadMessagelist()` 改为调用 `messaging.inbox()` 取数，用 `TwoLineListItem`
+   渲染（主题 + 来自 xxx）
+2. 新增 `on_pre_enter()`：每次进入该屏幕都重新加载（原来只在构造时加载一次，
+   启动后到达的消息永远看不到）
+3. 加日志 `INBOX loadMessagelist: N message(s)` 便于验证
+
+**⚠️ 同一时段发生的严重事故（必须记录）**：
+
+热补丁时误执行 `adb shell pm clear at.bitmessage.pybitmessage`，
+**清空了平板全部 App 数据**：
+
+| 数据 | 结果 |
+|---|---|
+| `keys.dat` 里的地址与私钥 `BM-2cU2vEDgphdWHe4Ucp1gSigCwDrJTRfyYV` | ❌ **永久丢失**，不可恢复 |
+| `messages.dat`（收件箱 2 条） | ✅ 从本地备份 `/tmp/tab_db_now.dat` 恢复 |
+| 新地址 | 自动生成 `BM-2cXrmLDcoGry6Z4kRWqCthD7kuhRxkzaWx`（另有 `BM-2cWGibweLdxrUHN2JaLhGiBtekxZAw2ufV`） |
+
+已把「**永远不要对装机设备跑 `pm clear`**」写进 HANDOFF §7 首位，并附上实验前
+备份 `messages.dat` 的命令。
+
+**影响面**：若有人保存过旧地址并发送消息，现在无法接收；把新地址重新发给对方即可。
+
 ### 1.31 ◐ M4.3 进行中：WakeLock 生效，锁屏 5 分钟连接保持（2026-11-20 12:05）
 
 **实现**：新增 `src/android_keepalive.py`（partial wake lock + 电池优化豁免引导），
