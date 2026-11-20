@@ -559,6 +559,43 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.30 ✅✅ M4.1e 通过：前台服务真正跑起来（2026-11-20 11:42）
+
+**设备实测**（小米平板 5，`main.py` 热补丁后重启）：
+
+```
+$ adb shell ps -A | grep bitmessage
+u0_a270  17068  ...  S at.bitmessage.pybitmessage
+u0_a270  27745  ...  S at.bitmessage.pybitmessage:service_pybitmessagesvc   ← 服务进程
+
+$ adb logcat -s python:* | grep SERVICE
+SERVICE started pid=27745
+SERVICE visible notification posted (API 33)
+SERVICE heartbeat uptime=60s notification=True
+
+$ adb shell dumpsys activity services at.bitmessage.pybitmessage
+  * ServiceRecord{... at.bitmessage.pybitmessage/.ServicePybitmessagesvc}
+    isForeground=true foregroundId=1 foregroundNoti=Notification(channel=org.kivy.p4a1 ...)
+
+退出 UI（KEYCODE_HOME）25 秒后再查：
+  ✅ 主进程 + :service_pybitmessagesvc 都在，心跳继续
+```
+
+**解决过程中踩到的三个真实问题**（每一个都是设备日志发现的，不是猜的）：
+
+| # | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | `Unable to start service Intent { cmp=.../org.kivy.android.PythonService } ... not found` | p4a 按 buildozer `services=` 的名字生成类名 | 用 `at.bitmessage.pybitmessage.ServicePybitmessagesvc` |
+| 2 | `NullPointerException: String.equals(...) on a null object`（`PythonService.java:82`） | `onStartCommand()` 对 `getString()` 的结果调 `.equals()`，缺键即崩 | 补 `serviceStartAsForeground="true"`（触发 `doStartForeground()`）+ `serviceTitle`/`smallIconName`/`contentTitle`/`contentText` |
+| 3 | `JNI DETECTED ERROR: GetStringUTFChars received NULL jstring` → SIGABRT | `nativeStart()` 有 7 个字符串参数，Java 全部过 `GetStringUTFChars` | 补 `androidArgument`/`pythonName`/`pythonHome`/`pythonPath` |
+
+**另一个关键点**：jnius 把 Python `str` 绑定到 `putExtra(String, CharSequence)` 重载，
+`Bundle.getString()` 就取不到值。**必须把 key 和 value 都包成 `java.lang.String`**，
+强制走 `(String, String)` 重载。这是前两次尝试"看起来传了却没生效"的原因。
+
+**更正 1.28 的说法**：`foregroundServiceType` 确实不需要（targetSdk 33），
+但**服务本身必须被显式启动**——这是 M4.1d 暴露、M4.1e 修复的核心缺口。
+
 ### 1.29 ❌ M4.1d 设备验证失败：服务从未被启动（2026-11-20 11:16）
 
 **设备**：小米平板 5（`b45f8e87`），装 run 44659795746 的包（个钥重签，免卸载升级）。

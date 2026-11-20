@@ -326,7 +326,7 @@ M4.8.2 建议在 M4.3（保活）验证同期处理，因为它与"消息能否�
 | M4.1b | `buildozer.spec` 声明服务 | `services = pybitmessagesvc:core_service.py`；注释不能缩进（AGENTS 坑） | `aapt2 dump badging` 含 service 声明 | ✅ |
 | M4.1c | 前台服务权限 | `FOREGROUND_SERVICE`（API 28+）+ `POST_NOTIFICATIONS`（33+）。**`foregroundServiceType` 在 targetSdk 33 下不需要**（API 34 才强制） | `aapt2 dump badging` 含两条权限 | ✅ |
 | M4.1d | 设备验证：通知可见 + 退 UI 后服务存活 | M4 的真正目标（收消息验证留到下一阶段） | `:service_pybitmessagesvc` 进程存在；通知栏可见；退后台后仍在 | ❌ **验证失败**：服务从未被启动（EVIDENCE §1.29） |
-| **M4.1e** | **在 App 启动时拉起服务** | p4a 只"声明"不"启动"。`src/main.py` 用 pyjnius 调 `startForegroundService(intent)`，intent 指向 `org.kivy.android.PythonService` 并带 `serviceEntrypoint=core_service.py` | **L**：`ps -A` 出现 `:service_pybitmessagesvc`；logcat 有 `SERVICE started` | ⬜ **下一阶段** |
+| **M4.1e** | **在 App 启动时拉起服务** | `src/main.py`：`startForegroundService()` + `at.bitmessage.pybitmessage.ServicePybitmessagesvc` + 全部 7 个 intent extra（key/value 包成 `java.lang.String`） | **L**：`ps -A` 出现 `:service_pybitmessagesvc`；`isForeground=true`；退后台后仍在 | ✅ **通过**（EVIDENCE §1.30） |
 
 > **设计取舍**：M4.1 只解决「进程不被杀」。把核心线程搬进 service 进程（涉及状态共享、
 > 单实例锁冲突）放到后续单独评估，避免一个任务混两件事。

@@ -16,30 +16,21 @@
 | M4.1a | `src/core_service.py` 服务入口 | ✅ **完成**（CI 已出包） |
 | M4.1b | `buildozer.spec` 声明 `services=` | ✅ **完成，aapt2 已验证**：manifest 含 `ServicePybitmessagesvc` + `android:process=":service_pybitmessagesvc"` |
 | M4.1c | 前台服务所需的权限（`FOREGROUND_SERVICE` / `POST_NOTIFICATIONS`） | ✅ **完成**，run 44659795746，aapt2 已确认 |
-| M4.1d | 设备验证 | ❌ **失败**：`:service` 进程不存在、无已注册服务、无 SERVICE 日志（EVIDENCE §1.29） |
-| **M4.1e** | **启动时拉起服务**（下一阶段） | ⬜ p4a 只"声明"服务，**从不启动**。需在 `src/main.py` 用 pyjnius `startForegroundService(intent)` |
+| M4.1d | 设备验证 | ❌ 失败：服务从未启动（EVIDENCE §1.29） |
+| **M4.1e** | **启动时拉起服务** | ✅ **通过**（EVIDENCE §1.30）：`:service_pybitmessagesvc` 进程在、`isForeground=true`、退后台仍存活 |
 
-> 证据：EVIDENCE.md **§1.27**（a/b）、**§1.28**（c）、**§1.29**（d 失败与根因）
+> **M4.1 阶段完成**（a/b/c/e ✅，d 失败由 e 修复）
 
-**M4.1e 的具体做法（下一阶段照此执行）**：
+**M4.1e 的三个坑（下一阶段遇到同类问题直接看这里）**：
 
-```python
-# src/main.py，核心启动之后
-from jnius import autoclass
-PythonActivity = autoclass('org.kivy.android.PythonActivity')
-PythonService = autoclass('org.kivy.android.PythonService')
-Intent = autoclass('android.content.Intent')
-ctx = PythonActivity.mActivity
-intent = Intent(ctx, PythonService)
-intent.putExtra('serviceEntrypoint', 'core_service.py')
-if Build.VERSION.SDK_INT >= 26:
-    ctx.startForegroundService(intent)
-else:
-    ctx.startService(intent)
-```
-
-**已验证的好消息**：个钥重签 + `pm install -r -d` 免卸载升级可用，数据无损
-（`knownnodes.dat` mtime 未变）；核心联网正常（22 条 ESTABLISHED）。
+1. **服务类名**：p4a 按 `services = 名字:入口` 生成 `<包名>.Service<首字母大写名字>`
+   → `at.bitmessage.pybitmessage.ServicePybitmessagesvc`，**不是** `org.kivy.android.PythonService`
+2. **`serviceStartAsForeground="true"` 必传**：`PythonService.java:82` 对它调 `.equals()`，
+   缺了就 NullPointerException
+3. **jnius 的 `putExtra` 重载陷阱**：Python `str` 会绑到 `(String, CharSequence)`，
+   `Bundle.getString()` 取不到。**key 和 value 都要包成 `java.lang.String`**
+4. 另外 `nativeStart()` 的 7 个参数（含 `androidArgument`/`pythonName`/`pythonHome`/`pythonPath`）
+   任何一个为 null 都会 JNI abort
 
 **设计取舍（勿混淆）**：M4.1 只解决「进程不被杀」。**不要**把 Bitmessage 核心搬进
 service 进程——两个进程会争单实例锁和同一份数据文件，这件事留到 M4.3 之后单独评估。
