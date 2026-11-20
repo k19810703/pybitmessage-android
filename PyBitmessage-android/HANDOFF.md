@@ -232,6 +232,51 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ---
 
+## 6.3 当前进度快照（2026-11-20 14:20，用户移动中暂停）
+
+### 已装到平板的包
+
+```
+/tmp/pybitmessage-ui-2026-11-20.apk    ← 当前平板上的就是这个
+sha256 c4156aedfc2811df9f637ed4dad1912c7064488e307a92506cc26d10a566ee4c
+run    44685032281
+```
+
+**平板实测通过**：启动无崩溃、`isForeground=true`、wake lock 持有、
+菜单 Inbox 能列消息、**点开消息弹详情**（日志 `INBOX open detail ... len(body)=101`）、
+历史标题已修复为 `公网测试 1`。
+
+### 待完成的下一步（回来后第一件事）
+
+**CI run `44686653091`**（M3.9.1c：把历史数据迁移扩展到**正文**）——
+推送后构建约 10 分钟，用户暂停时可能已出包。回来后：
+
+1. `gh run list --repo k19810703/pybitmessage-android --limit 1` 看是否 success
+2. 下载 + `scripts/resign-apk.sh` 重签
+3. **先问用户**再安装（HANDOFF §6.5 规则）
+4. 装完验证：之前那条「公网测试 1」的**正文**应从
+   `b'hello via public network...'` 变成正常文本
+
+### 仍未做的
+
+| 项 | 状态 |
+|---|---|
+| 豆腐块图标目视确认 | 代码已移除图标字体依赖，需用户看一眼确认 |
+| D5 锁屏 30 分钟验收 | 用户说最后做 |
+| M4.2 通知权限运行时申请 | 未做 |
+| M4.4/M4.5/M4.6/M4.7、M4.8.x | 未做 |
+| M5 交付、M6 中文化 | 未做 |
+
+### 数据备份位置（都还在）
+
+```
+/tmp/bk_keys_ui.dat    当前地址私钥（2 个地址）
+/tmp/bk_msgs_ui.dat    安装前消息库
+/tmp/bk_kn_ui.dat      knownnodes
+```
+
+---
+
 ## 6.4 待验包（2026-11-20 13:42，**已准备好，未安装**）
 
 ```
