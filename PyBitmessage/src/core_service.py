@@ -1,28 +1,32 @@
 """Foreground service entry point (milestone M4.1).
 
-python-for-android starts this file in a **separate Android process**
-(``<package>:service``) when ``services=`` is declared in buildozer.spec.
-That process is kept alive by the platform and by our foreground
-notification, independently of the Kivy UI process.
+python-for-android starts this file in a separate Android process
+(``<package>:service_pybitmessagesvc``) because buildozer.spec declares
+``services = pybitmessagesvc:core_service.py``.
 
-Scope of this milestone: prove the mechanism works end to end -- the
-process starts, posts a persistent notification on a proper channel,
-survives the UI being backgrounded/killed, and stops cleanly. The
-Bitmessage core is **not** moved in here yet (M4.3+): two processes
+What p4a already gives us (v2024.01.21, PythonService.java):
+  * the process is created and ``onStartCommand`` calls
+    ``startForeground(id, notification)`` -- so the process is protected
+    from low-memory kills without extra work from Python;
+  * the channel it creates uses ``IMPORTANCE_NONE``, i.e. the notification
+    is *silent and hidden from the shade*. That is fine for keep-alive but
+    it means we cannot "see" it in a screenshot, so this module **re-posts
+    a visible, low-importance notification on its own channel** to make the
+    foreground state observable (acceptance: notification visible, M4.1c).
+
+What this module does NOT do: run the Bitmessage core. Two processes
 running the core would fight over the single-instance lock and the same
-data files.
-
-Context note: a p4a ``Service`` has no ``mActivity``; we resolve the
-application context from the service handle instead, and fall back to
-``android.app.ActivityThread`` when even that is unavailable.
+data files. Moving the core here is deferred to M4.3+ after the keep-alive
+baseline is proven.
 """
-
 import os
 import time
 
 SERVICE_NAME = 'PyBitmessage'
 CHANNEL_ID = 'pybitmessage_service'
-NOTIFICATION_ID = 1
+CHANNEL_NAME = '后台服务'
+NOTIFICATION_ID = 1001
+HEARTBEAT_EVERY_S = 60
 
 
 def _log(message):
@@ -30,104 +34,94 @@ def _log(message):
     print('SERVICE %s' % message, flush=True)
 
 
-def _app_context():
-    """Best-effort Android Context for posting notifications."""
-    from jnius import autoclass, cast  # noqa: PLC0415 - android only
-
-    Context = autoclass('android.content.Context')
-
-    # 1) the p4a PythonService instance, when the runtime sets it up
-    try:
-        PythonService = autoclass('org.kivy.android.PythonService')
-        if getattr(PythonService, 'mService', None) is not None:
-            return cast(Context, PythonService.mService)
-    except Exception:  # noqa: BLE001
-        pass
-
-    # 2) the application context via ActivityThread
-    try:
-        ActivityThread = autoclass('android.app.ActivityThread')
-        app = ActivityThread.currentApplication()
-        if app is not None:
-            return cast(Context, app)
-    except Exception:  # noqa: BLE001
-        pass
-
-    raise RuntimeError('no Android context available')
-
-
-def _build_notification(context):
-    """Create a channel-aware persistent notification."""
+def _ctx():
+    """Resolve an Android Context usable for posting notifications."""
     from jnius import autoclass, cast  # noqa: PLC0415
 
     Context = autoclass('android.content.Context')
-    PendingIntent = autoclass('android.app.PendingIntent')
-    NotificationManager = autoclass('android.app.NotificationManager')
-    Build = autoclass('android.os.Build$VERSION')
-    sdk = Build.SDK_INT
 
-    if sdk >= 26:
-        NotificationChannel = autoclass('android.app.NotificationChannel')
-        nm = cast(NotificationManager,
-                  context.getSystemService(Context.NOTIFICATION_SERVICE))
-        channel = NotificationChannel(
-            CHANNEL_ID, SERVICE_NAME, NotificationManager.IMPORTANCE_LOW)
-        channel.setDescription('Keeps the Bitmessage node online')
-        nm.createNotificationChannel(channel)
-
-    # tapping the notification brings the UI back
-    launch = context.getPackageManager().getLaunchIntentForPackage(
-        context.getPackageName())
-    flags = PendingIntent.FLAG_UPDATE_CURRENT
-    if sdk >= 23:
-        flags |= PendingIntent.FLAG_IMMUTABLE
-    pending = PendingIntent.getActivity(context, 0, launch, flags)
-
-    Builder = autoclass('android.app.Notification$Builder')
-    RDrawable = autoclass('android.R$drawable')
-    builder = Builder(context, CHANNEL_ID) if sdk >= 26 else Builder(context)
-    builder.setContentTitle(SERVICE_NAME)
-    builder.setContentText('正在运行')
-    builder.setSmallIcon(RDrawable.stat_notify_sync)
-    builder.setOngoing(True)
-    builder.setContentIntent(pending)
-    return builder.build(), nm if sdk >= 26 else cast(
-        NotificationManager,
-        context.getSystemService(Context.NOTIFICATION_SERVICE)), sdk
-
-
-def _post_notification():
-    """Post the persistent notification; returns True on success."""
+    # 1) the running p4a service instance
     try:
-        from jnius import autoclass  # noqa: PLC0415
-        from jnius import cast  # noqa: F401  (re-exported for clarity)
+        PythonService = autoclass('org.kivy.android.PythonService')
+        svc = getattr(PythonService, 'mService', None)
+        if svc is not None:
+            return cast(Context, svc)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 2) application context fallback
+    ActivityThread = autoclass('android.app.ActivityThread')
+    app = ActivityThread.currentApplication()
+    if app is None:
+        raise RuntimeError('no Android context')
+    return cast(Context, app)
+
+
+def post_visible_notification():
+    """Create a VISIBLE low-importance channel and post an ongoing note.
+
+    p4a's own channel is IMPORTANCE_NONE (invisible in the shade), so this
+    is what makes the service observable to a human / to a screenshot.
+    """
+    try:
+        from jnius import autoclass, cast  # noqa: PLC0415
+
         Context = autoclass('android.content.Context')
+        Build = autoclass('android.os.Build$VERSION')
+        sdk = Build.SDK_INT
+        ctx = _ctx()
+
         NotificationManager = autoclass('android.app.NotificationManager')
-        context = _app_context()
-        notification, nm, sdk = _build_notification(context)
-        nm.notify(NOTIFICATION_ID, notification)
-        _log('notification posted (API %d)' % sdk)
+        nm = cast(NotificationManager,
+                  ctx.getSystemService(Context.NOTIFICATION_SERVICE))
+
+        # --- channel (API 26+) ---
+        if sdk >= 26:
+            NotificationChannel = autoclass(
+                'android.app.NotificationChannel')
+            channel = NotificationChannel(
+                CHANNEL_ID, CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW)
+            channel.setDescription('保持 Bitmessage 节点在线')
+            nm.createNotificationChannel(channel)
+
+        # --- tap target: relaunch the UI activity ---
+        PendingIntent = autoclass('android.app.PendingIntent')
+        AndroidIntent = autoclass('android.content.Intent')
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        intent = AndroidIntent(ctx, PythonActivity)
+        flags = PendingIntent.FLAG_UPDATE_CURRENT
+        if sdk >= 23:
+            flags |= PendingIntent.FLAG_IMMUTABLE
+        pending = PendingIntent.getActivity(ctx, 0, intent, flags)
+
+        # --- build + post ---
+        Builder = autoclass('android.app.Notification$Builder')
+        builder = Builder(ctx, CHANNEL_ID) if sdk >= 26 else Builder(ctx)
+        builder.setContentTitle(SERVICE_NAME)
+        builder.setContentText('正在运行')
+        builder.setSmallIcon(ctx.getApplicationInfo().icon)
+        builder.setOngoing(True)
+        builder.setContentIntent(pending)
+        nm.notify(NOTIFICATION_ID, builder.build())
+        _log('visible notification posted (API %d)' % sdk)
         return True
-    except Exception as exc:  # noqa: BLE001 - never crash the service
+    except Exception as exc:  # noqa: BLE001 - never kill the service
         _log('notification failed: %r' % (exc,))
         return False
 
 
 def main():
-    """Service loop: keep the process alive, refresh the notification."""
-    _log('started, pid=%s' % os.getpid())
-    ok = _post_notification()
-    beat = 0
-    posted = ok
+    """Keep the process alive; the heartbeat is what CI/devices assert on."""
+    _log('started pid=%s' % os.getpid())
+    ok = post_visible_notification()
+    started = time.time()
     while True:
-        beat += 1
-        # Retry once a minute until the notification is actually up
-        # (the context may not be ready in the very first second).
-        if not posted and beat % 10 == 0:
-            posted = _post_notification()
-        if beat % 10 == 1:
-            _log('heartbeat %d (notification=%s)' % (beat, posted))
-        time.sleep(6)
+        time.sleep(HEARTBEAT_EVERY_S)
+        _log('heartbeat uptime=%ds notification=%s' % (
+            int(time.time() - started), ok))
+        if not ok:
+            ok = post_visible_notification()
 
 
 if __name__ == '__main__':

@@ -559,6 +559,35 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.27 ◐ M4.1a/b 完成：服务已进包（2026-11-20 09:05）
+
+**本阶段范围**：只做「把 p4a 服务机制跑通并进包」，不搬核心、不做设备验证。
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| M4.1a 服务入口 | ✅ `src/core_service.py` 新增 | 代码已提交（`f4fddd0` 起） |
+| M4.1b spec 声明 | ✅ `services = pybitmessagesvc:core_service.py` | 见下 |
+| CI 构建 | ✅ run **44649423146**（buildozer android debug，exit 0） | `gh run watch --exit-status` |
+| **manifest 断言（A）** | ✅ **通过** | 见下方 aapt2 输出 |
+
+```
+$ aapt2 dump xmltree --file AndroidManifest.xml pybitmessage-0.1.2-arm64-v8a-debug.apk
+  E: service (line=66)
+    android:name="at.bitmessage.pybitmessage.ServicePybitmessagesvc"
+    android:process=":service_pybitmessagesvc"
+```
+
+**本阶段发现的缺口（下阶段 M4.1c/d 处理）**：
+
+1. p4a v2024.01.21 的模板**只生成 `android:process`**，没有 `foregroundServiceType`，
+   也没有 `FOREGROUND_SERVICE` 权限 → Android 9+/14 上前台服务会被系统拒绝启动。
+   需要在 spec 里补 `android.permissions`，并用 `--extra-manifest-xml` 或 hook 注入
+   `android:foregroundServiceType="dataSync"`。
+2. p4a 的 `PythonService.onStartCommand` 已经会 `startForeground()`，但它建的 channel 是
+   `IMPORTANCE_NONE`（通知在通知栏**不可见**）。所以 `core_service.py` 自己再发一条
+   `IMPORTANCE_LOW` 的可见通知——这是 M4.1c 要验证的点。
+3. 设备未连接 USB，M4.1d 的装机验证未做。
+
 ### 1.26 ✅✅ G3 公网版达成：家庭网络双向加密消息 + 回执全通（2026-11-19 20:30）
 
 **环境**：Mac 脚本节点（`scripts/pubnet_node.py`，C PoW）+ 小米平板 5（TLS 修复包，

@@ -1,4 +1,4 @@
-# 交接单 · 2026-11-19 20:40
+# 交接单 · 2026-11-20 09:10
 
 > 目的：新 session 从这份文档直接接着干，不用回翻对话。
 > 除非特别说明，命令都在仓库根 `for_shizong/` 下执行，adb 用
@@ -7,9 +7,49 @@
 
 ---
 
+## 0. 当前阶段（每次只做一个阶段，做完就更新这里）
+
+**正在做：M4.1 前台服务**（MILESTONES §7.1，拆成 a/b/c/d 四步）
+
+| 步骤 | 内容 | 状态 |
+|---|---|---|
+| M4.1a | `src/core_service.py` 服务入口 | ✅ **完成**（CI 已出包） |
+| M4.1b | `buildozer.spec` 声明 `services=` | ✅ **完成，aapt2 已验证**：manifest 含 `ServicePybitmessagesvc` + `android:process=":service_pybitmessagesvc"` |
+| M4.1c | 可见通知 + `foregroundServiceType` + `FOREGROUND_SERVICE` 权限 | ⬜ **下一阶段从这里开始** |
+| M4.1d | 设备验证：通知可见、退 UI 后 `:service` 存活 | ⬜ 需要平板插 USB |
+
+> 证据：EVIDENCE.md **§1.27**（CI run 44649423146，exit 0）
+
+**下阶段要补的两个缺口（已确认，非猜测）**：
+
+1. p4a v2024.01.21 的 manifest 模板**只给 `android:process`**，没有
+   `android:foregroundServiceType`，也没有 `FOREGROUND_SERVICE` 权限 →
+   Android 9+/14 上前台服务起不来。做法：`android.permissions` 加
+   `FOREGROUND_SERVICE`，再用 p4a `--extra-manifest-xml`（或 buildozer 的
+   manifest 注入选项）补 `android:foregroundServiceType="dataSync"`。
+2. p4a 自己的 `startForeground` 用 `IMPORTANCE_NONE` channel（**通知栏不可见**）；
+   `core_service.py` 已自行再发一条 `IMPORTANCE_LOW` 通知，M4.1c 要验证它真的可见。
+
+**验证命令（下一个出包后）**：
+
+```bash
+gh run download --repo k19810703/pybitmessage-android <run-id> -D /tmp/apk-m41c
+ADB=~/Documents/platform-tools/adb
+$ADB -s b45f8e87 push /tmp/apk-m41c/*/*.apk /data/local/tmp/bm.apk
+$ADB -s b45f8e87 shell pm install -r -d /data/local/tmp/bm.apk
+$ADB -s b45f8e87 shell am start -n at.bitmessage.pybitmessage/org.kivy.android.PythonActivity
+$ADB -s b45f8e87 shell "ps -A | grep pybitmessage"    # 期望 :service_pybitmessagesvc
+$ADB -s b45f8e87 logcat -d -s python:* | grep SERVICE # 期望 heartbeat / visible notification posted
+```
+
+**设计取舍（勿混淆）**：M4.1 只解决「进程不被杀」。**不要**把 Bitmessage 核心搬进
+service 进程——两个进程会争单实例锁和同一份数据文件，这件事留到 M4.3 之后单独评估。
+
+---
+
 ## 1. 一句话状态
 
-**G3 公网版达成（2026-11-19 20:30）：家庭 Wi-Fi 下 Mac 脚本节点 ↔ 平板 App 经公网 Bitmessage 网络双向加密消息 + 双向回执全部闭环。** 本轮修掉 dandelion.py 的 `ord()` py3 bug（InvThread 死亡真凶）和 api.py 的 bytes 入库 bug（均热补丁验证、代码已入库待 CI 出包）。
+**M2 完成、G3 公网版达成（2026-11-19 20:30）：Mac 脚本节点 ↔ 平板 App 经公网双向加密消息 + 双向回执全部闭环。当前推进 M4（后台与持久化），第一站 M4.1 前台服务。**
 
 ---
 
