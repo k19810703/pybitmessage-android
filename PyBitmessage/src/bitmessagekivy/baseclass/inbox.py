@@ -38,10 +38,59 @@ class Inbox(Screen):
         """Initialize UI and load message list"""
         self.loadMessagelist()
 
+    def on_pre_enter(self, *args):
+        """Reload whenever the screen is opened.
+
+        The list used to be filled once at construction, so anything that
+        arrived after startup never appeared in the drawer's Inbox.
+        """
+        try:
+            self.loadMessagelist()
+        except Exception as exc:  # noqa: BLE001
+            print('INBOX refresh failed: %r' % (exc,), flush=True)
+
     def loadMessagelist(self, where="", what=""):
-        """Load inbox messages"""
+        """Load inbox messages into the list.
+
+        Until now this only recorded the selected account and never queried
+        anything, which is why the drawer's Inbox screen stayed empty even
+        though messages had arrived (the demo screen did show them -- it
+        queries directly). Read the same rows the demo screen reads so the
+        two places always agree.
+        """
         self.set_default_address()
         self.account = self.kivy_state.selected_address
+        try:
+            from pybitmessage.bitmessagekivy.messaging import inbox
+            messages = inbox()
+        except Exception as exc:  # noqa: BLE001 - never break navigation
+            print('INBOX load failed: %r' % (exc,), flush=True)
+            messages = []
+        self.queryreturn = messages
+        print('INBOX loadMessagelist: %d message(s)' % len(messages),
+              flush=True)
+        self._render(messages)
+
+    def _render(self, messages):
+        """Fill the list with one TwoLineListItem per message."""
+        ml = self.ids.get('ml') if self.ids else None
+        if ml is None:
+            return
+        from kivymd.uix.label import MDLabel
+        from kivymd.uix.list import TwoLineListItem
+
+        ml.clear_widgets()
+        if not messages:
+            ml.add_widget(MDLabel(
+                text=self.label_str, halign='center',
+                theme_text_color='Secondary'))
+            return
+        for from_addr, subject, body, _received in messages:
+            title = subject or (body[:28] + ('…' if len(body) > 28 else ''))
+            ml.add_widget(TwoLineListItem(
+                text=str(title),
+                secondary_text='来自 %s' % from_addr,
+                _no_ripple_effect=True))
 
     def refresh_callback(self, *args):
         """Refresh the inbox messages while showing a loading spinner"""
