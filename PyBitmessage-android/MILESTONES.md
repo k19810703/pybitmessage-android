@@ -322,10 +322,10 @@ M4.8.2 建议在 M4.3（保活）验证同期处理，因为它与"消息能否�
 
 | ID | 子任务 | 关键点 | 验收 | 状态 |
 |---|---|---|---|---|
-| M4.1a | 最小服务入口 `core_service.py` | 先让 p4a service 机制在本项目里跑通，**不搬核心逻辑** | `adb shell ps -A \| grep pybitmessage` 出现 `:service` 进程 | ⬜ |
-| M4.1b | `buildozer.spec` 声明服务 | `services = pybitmessagesvc:core_service.py`；注释不能缩进（AGENTS 坑） | `aapt2 dump badging` 含 service 声明 | ⬜ |
-| M4.1c | 常驻通知 | Android 8+ 必须建 `NotificationChannel`，否则通知静默失败 | 通知栏可见「PyBitmessage 正在运行」 | ⬜ |
-| M4.1d | 退出 UI 后服务存活 + 锁屏判据 | M4 的真正目标（收消息验证留到下一阶段） | 退后台/锁屏后 `:service` 进程仍在 | ⬜ |
+| M4.1a | 最小服务入口 `core_service.py` | 先让 p4a service 机制在本项目里跑通，**不搬核心逻辑** | `adb shell ps -A \| grep pybitmessage` 出现 `:service` 进程 | ✅ |
+| M4.1b | `buildozer.spec` 声明服务 | `services = pybitmessagesvc:core_service.py`；注释不能缩进（AGENTS 坑） | `aapt2 dump badging` 含 service 声明 | ✅ |
+| M4.1c | 前台服务权限 | `FOREGROUND_SERVICE`（API 28+）+ `POST_NOTIFICATIONS`（33+）。**`foregroundServiceType` 在 targetSdk 33 下不需要**（API 34 才强制） | `aapt2 dump badging` 含两条权限 | ✅ |
+| M4.1d | 设备验证：通知可见 + 退 UI 后服务存活 | M4 的真正目标（收消息验证留到下一阶段） | `:service_pybitmessagesvc` 进程存在；通知栏可见；退后台后仍在 | ⬜ **需平板接 USB** |
 
 > **设计取舍**：M4.1 只解决「进程不被杀」。把核心线程搬进 service 进程（涉及状态共享、
 > 单实例锁冲突）放到后续单独评估，避免一个任务混两件事。

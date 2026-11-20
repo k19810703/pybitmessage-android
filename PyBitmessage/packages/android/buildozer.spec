@@ -276,12 +276,11 @@ p4a.branch = v2024.01.21
 #p4a.local_recipes =
 
 # (str) Filename to the hook for p4a
-# M4.1c: injects android:foregroundServiceType on the keep-alive service.
-# buildozer already prefixes this with the spec's own directory
-# (packages/android/), so a bare filename is correct here -- writing
-# "packages/android/p4a_hook.py" double-prefixed it and broke the build
-# (run 44658662598).
-p4a.hook = p4a_hook.py
+# M4.1c: NOT needed while targetSdk is 33. android:foregroundServiceType is
+# only mandatory from targetSdk 34 (Android 14); at 33 startForeground()
+# works with just the FOREGROUND_SERVICE permission, which we declare above.
+# Re-add a hook (p4a --extra-manifest-xml) if targetSdk is ever raised.
+#p4a.hook =
 
 # (str) Bootstrap to use for android builds
 # p4a.bootstrap = sdl2

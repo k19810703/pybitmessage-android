@@ -15,31 +15,28 @@
 |---|---|---|
 | M4.1a | `src/core_service.py` 服务入口 | ✅ **完成**（CI 已出包） |
 | M4.1b | `buildozer.spec` 声明 `services=` | ✅ **完成，aapt2 已验证**：manifest 含 `ServicePybitmessagesvc` + `android:process=":service_pybitmessagesvc"` |
-| M4.1c | 可见通知 + `foregroundServiceType` + `FOREGROUND_SERVICE` 权限 | ⬜ **下一阶段从这里开始** |
-| M4.1d | 设备验证：通知可见、退 UI 后 `:service` 存活 | ⬜ 需要平板插 USB |
+| M4.1c | 前台服务所需的权限（`FOREGROUND_SERVICE` / `POST_NOTIFICATIONS`） | ✅ **完成**，run 44659795746，aapt2 已确认 |
+| M4.1d | 设备验证：通知可见、`:service` 进程、退 UI 后存活 | ⬜ **待做（需平板接 USB）** |
 
-> 证据：EVIDENCE.md **§1.27**（CI run 44649423146，exit 0）
+> 证据：EVIDENCE.md **§1.27**（a/b）、**§1.28**（c）
 
-**下阶段要补的两个缺口（已确认，非猜测）**：
+**§1.28 的更正**：`android:foregroundServiceType` 在 **targetSdk 33 下不需要**
+（API 34 才强制），所以不需要 p4a hook。spec 里已留注释说明何时要重新加。
 
-1. p4a v2024.01.21 的 manifest 模板**只给 `android:process`**，没有
-   `android:foregroundServiceType`，也没有 `FOREGROUND_SERVICE` 权限 →
-   Android 9+/14 上前台服务起不来。做法：`android.permissions` 加
-   `FOREGROUND_SERVICE`，再用 p4a `--extra-manifest-xml`（或 buildozer 的
-   manifest 注入选项）补 `android:foregroundServiceType="dataSync"`。
-2. p4a 自己的 `startForeground` 用 `IMPORTANCE_NONE` channel（**通知栏不可见**）；
-   `core_service.py` 已自行再发一条 `IMPORTANCE_LOW` 通知，M4.1c 要验证它真的可见。
-
-**验证命令（下一个出包后）**：
+**下一个动作（平板一接上就能做）**：
 
 ```bash
-gh run download --repo k19810703/pybitmessage-android <run-id> -D /tmp/apk-m41c
+# 装最新包（run 44659795746，已下载在 /tmp/apk-m41c）
+APK=/tmp/apk-m41c/pybitmessage-apk-31/pybitmessage-0.1.2-arm64-v8a-debug.apk
 ADB=~/Documents/platform-tools/adb
-$ADB -s b45f8e87 push /tmp/apk-m41c/*/*.apk /data/local/tmp/bm.apk
-$ADB -s b45f8e87 shell pm install -r -d /data/local/tmp/bm.apk
+$ADB -s b45f8e87 push $APK /data/local/tmp/bm.apk
+$ADB -s b45f8e87 shell pm install -r -d /data/local/tmp/bm.apk   # 需个钥重签过
+$ADB -s b45f8e87 logcat -c
 $ADB -s b45f8e87 shell am start -n at.bitmessage.pybitmessage/org.kivy.android.PythonActivity
-$ADB -s b45f8e87 shell "ps -A | grep pybitmessage"    # 期望 :service_pybitmessagesvc
-$ADB -s b45f8e87 logcat -d -s python:* | grep SERVICE # 期望 heartbeat / visible notification posted
+sleep 30
+$ADB -s b45f8e87 shell "ps -A | grep pybitmessage"   # 期望两行：主进程 + :service_pybitmessagesvc
+$ADB -s b45f8e87 logcat -d -s python:* | grep SERVICE # 期望 started / heartbeat / visible notification posted
+$ADB -s b45f8e87 exec-out screencap -p > /tmp/notif.png   # 通知栏可见性（S）
 ```
 
 **设计取舍（勿混淆）**：M4.1 只解决「进程不被杀」。**不要**把 Bitmessage 核心搬进

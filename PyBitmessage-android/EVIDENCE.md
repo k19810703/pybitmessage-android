@@ -559,6 +559,45 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.28 ✅ M4.1c 完成：前台服务所需权限已齐（2026-11-20 10:35）
+
+**结论先行**：`android:foregroundServiceType` 在本项目**当前不需要**——它是
+**targetSdk ≥ 34** 才强制。本项目 `targetSdkVersion:'33'`，`startForeground()`
+只要 `FOREGROUND_SERVICE` 权限即可。之前判断的"缺口 1"是我对 API 版本的误判，
+在此更正。
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| CI 构建 | ✅ run **44659795746**（exit 0） | `gh run watch --exit-status` |
+| `FOREGROUND_SERVICE` 权限 | ✅ 在包内 | 见下 |
+| `POST_NOTIFICATIONS` 权限 | ✅ 在包内 | 见下 |
+| service 声明 | ✅ 保持 | 见下 |
+
+```
+$ aapt2 dump badging .../pybitmessage-0.1.2-arm64-v8a-debug.apk
+targetSdkVersion:'33'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+uses-permission: name='android.permission.FOREGROUND_SERVICE'
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+
+$ aapt2 dump xmltree --file AndroidManifest.xml ...
+  E: service (line=68)
+    android:name="at.bitmessage.pybitmessage.ServicePybitmessagesvc"
+    android:process=":service_pybitmessagesvc"
+```
+
+**过程中的两次翻车（都记下来，避免重犯）**：
+
+1. **run 44658662598 构建失败**：`p4a.hook = packages/android/p4a_hook.py`
+   被 buildozer 又拼了一次 spec 目录，变成
+   `packages/android/packages/android/p4a_hook.py`。**`p4a.hook` 只写文件名**。
+2. `--extra-manifest-xml` 通过 p4a hook 注入**没有生效**（hook 的
+   `before_apk_build` 未被调用，日志无输出）。既然 targetSdk 33 不需要该属性，
+   直接删掉 hook，spec 里留注释说明何时需要重新加。
+
+**剩余**：M4.1d 设备验证（通知可见 + `:service` 进程 + 退 UI 存活），**等平板接 USB**。
+
 ### 1.27 ◐ M4.1a/b 完成：服务已进包（2026-11-20 09:05）
 
 **本阶段范围**：只做「把 p4a 服务机制跑通并进包」，不搬核心、不做设备验证。
