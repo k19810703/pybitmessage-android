@@ -559,6 +559,57 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.33 ✅ 启动即崩已修复 + 菜单 Inbox 修复验证通过（2026-11-20 13:35）
+
+**症状**：装上 1.32 的包后 App 一启动就闪退。
+
+```
+JNI DETECTED ERROR IN APPLICATION: jclass is an invalid JNI transition
+frame reference or invalid reference ... in call to GetMethodID
+  from int org.libsdl.app.SDLActivity.nativeRunMain(...)
+libc: Fatal signal 6 (SIGABRT) in tid (SDLThread)
+```
+
+**两次尝试、两个不同根因**（都是读设备日志发现的）：
+
+| 尝试 | 做法 | 结果 | 根因 |
+|---|---|---|---|
+| 1 | `startForegroundService()` 放在 `bitmessagemain.main()` **之前** | 闪退 | 服务进程在主进程还在初始化 SDL/JNI 时被 fork，JNI 引用失效 |
+| 2 | 挪到**工作线程** + sleep 8s | 闪退且不启动服务 | 工作线程没有 JNI class loader → `ClassNotFoundException: ServicePybitmessagesvc` |
+| 3 | **Kivy `Clock.schedule_once`（主线程）** | ✅ 正常 | 事件循环已建立，JNI 上下文有效 |
+
+**最终设备实测**：
+
+```
+KEEPALIVE scheduled in 8.0s (main thread)
+KEEPALIVE: partial wake lock acquired
+KEEPALIVE active: wakeLock=True batteryExempt=False
+SERVICE startForegroundService(... -> core_service.py) issued, API 33
+SERVICE started pid=18263
+
+$ ps -A | grep bitmessage
+... at.bitmessage.pybitmessage                      ← UI 进程
+... at.bitmessage.pybitmessage:service_pybitmessagesvc  ← 服务进程
+JNI 错误次数: 0
+```
+
+**另外两个修复**：
+
+1. **去掉 BroadcastReceiver**：用 `JavaClass` 继承 `BroadcastReceiver` 也会触发同样的
+   invalid-jclass abort。改为 wake lock 一次获取、进程生命周期内一直持有（省电收益
+   远小于崩溃风险；耗电由 M4.7.1 另行测量）
+2. **wake lock 去重**：加 `isHeld()` 判断。之前 `dumpsys power` 里同一 tag 累积了 19 条
+   ACQ 记录；修复后单次启动只有 1 条 ACQ
+
+**菜单 Inbox 修复验证**（1.32 的改动）：
+
+```
+INBOX loadMessagelist: 2 message(s)
+INBOX loadMessagelist: 2 message(s)   ← on_pre_enter 再次刷新
+```
+
+收件箱 2 条消息（今天 09:56「test form sjy」+ 昨晚「公网测试 1」）都能被菜单 Inbox 加载。
+
 ### 1.32 M3.9.1 修复：菜单里的 Inbox 永远是空的（2026-11-20 12:55）
 
 **用户报告**：打开抽屉菜单 → Inbox，里面什么都没有（但主界面能显示消息）。

@@ -229,6 +229,22 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ---
 
+## 6.5 协作规则（用户明确要求，必须遵守）
+
+**任何涉及物理设备（平板 `b45f8e87`）的操作，必须先向用户确认，不要自行安装/卸载/清数据/重启 App。**
+
+具体包括但不限于：
+
+- `pm install` / `adb install` / `adb push <apk>`
+- `pm uninstall` / `am force-stop` / `am start`
+- **`pm clear`（绝对禁止，会清掉私钥）**
+- 热补丁推送（`push` 到 `files/app/`）
+
+允许不询问就做的：只读查询（`ps`、`logcat`、`cat`、`dumpsys`、`screencap`）。
+CI 出包、本地编译、改代码、写文档都不需要确认。
+
+---
+
 ## 7. 已知坑（都会浪费时间，先看这里）
 
 | 现象 | 原因 | 对策 |
