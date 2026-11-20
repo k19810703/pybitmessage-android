@@ -100,6 +100,58 @@ def alias_core_modules():
         sys.modules.get('pybitmessage.state') is _state), flush=True)
 
 
+SERVICE_ENTRYPOINT = 'core_service.py'
+
+
+def start_keepalive_service():
+    """Start the foreground service that keeps the node alive (M4.1e).
+
+    python-for-android *declares* the service in AndroidManifest.xml from
+    ``services =`` in buildozer.spec, but nothing ever starts it -- that is
+    why M4.1d found no ``:service_pybitmessagesvc`` process on the device.
+
+    We start it from here, after BITMESSAGE_HOME is set, so the service
+    process inherits the same environment. It runs ``core_service.py``,
+    which only keeps the process up and posts a notification; the
+    Bitmessage core stays in this (UI) process on purpose -- two processes
+    running the core would fight over the single-instance lock and the
+    same data files.
+    """
+    if os.environ.get('ANDROID_ARGUMENT') is None:
+        return  # desktop run
+
+    try:
+        from jnius import autoclass, cast
+
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        PythonService = autoclass('org.kivy.android.PythonService')
+        Intent = autoclass('android.content.Intent')
+        Context = autoclass('android.content.Context')
+        Build = autoclass('android.os.Build$VERSION')
+
+        activity = PythonActivity.mActivity
+        if activity is None:
+            print('SERVICE start skipped: no activity', flush=True)
+            return
+        context = cast(Context, activity)
+
+        intent = Intent(context, PythonService)
+        intent.putExtra('serviceEntrypoint', SERVICE_ENTRYPOINT)
+        # p4a reads these when building the foreground notification.
+        intent.putExtra('androidPrivate', context.getFilesDir().getPath())
+        intent.putExtra('contentTitle', 'PyBitmessage')
+        intent.putExtra('contentText', '正在运行')
+
+        if Build.SDK_INT >= 26:
+            context.startForegroundService(intent)
+        else:
+            context.startService(intent)
+        print('SERVICE startForegroundService(%s) issued, API %d' % (
+            SERVICE_ENTRYPOINT, Build.SDK_INT), flush=True)
+    except Exception as exc:  # noqa: BLE001 - never block startup
+        print('SERVICE start failed: %r' % (exc,), flush=True)
+
+
 def main():
     """Start the core with the Kivy user interface."""
     prepare_home()
@@ -132,6 +184,7 @@ def main():
               'public peers', flush=True)
 
     alias_core_modules()
+    start_keepalive_service()
     bitmessagemain.main()
 
 
