@@ -577,8 +577,26 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 其他行: test form sjy     ← 保持不变
 ```
 
-**待验证**：CI run 44685032281 出包后，需在设备上确认三点（点击能开、无豆腐块、
-历史标题显示中文）。
+**设备验证（run 44685032281 的包，2026-11-20 14:15）**：
+
+```
+INBOX migrated 1 legacy subject(s)        ← 历史数据修复
+INBOX loadMessagelist: 2 message(s)
+INBOX open detail from=BM-2cSqxwX1LEDb… len(body)=101   ← 用户点开成功
+KEEPALIVE active: wakeLock=True batteryExempt=False
+SERVICE started pid=16546
+JNI 崩溃: 0 次
+```
+
+| 项 | 结果 |
+|---|---|
+| (a) 点击打开详情 | ✅ 日志确认 `open detail` 被触发 |
+| (b) 豆腐块图标 | 待用户目视确认（代码已移除图标字体依赖） |
+| (c) 历史标题 | ✅ 数据库已是 `公网测试 1` |
+
+**发现遗漏**：迁移只处理了 `subject` 列，**正文仍是** `b'hello via public network…'`。
+已扩展迁移到 `message` 列（commit `02a92c7`，本地用设备库备份验证：
+正文解码为 `hello via public network, from Mac at home (19:52) 中文+emoji 🎉`）。
 
 ### 1.34 ✅✅ 正式包（无热补丁）全项通过（2026-11-20 13:55）
 
