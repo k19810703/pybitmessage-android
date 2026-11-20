@@ -97,7 +97,11 @@ fullscreen = 0
 # keep-alive service dies immediately (M4.1c).
 # POST_NOTIFICATIONS (API 33+): needed for the service notification to be
 # visible at all; requested at runtime (M4.2.1).
-android.permissions = INTERNET, ACCESS_NETWORK_STATE, FOREGROUND_SERVICE, POST_NOTIFICATIONS
+# WAKE_LOCK: this process holds a partial wake lock while the screen is off so
+# the peer connections survive doze (M4.3 / acceptance D5).
+# REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: lets us offer the "no restrictions"
+# toggle; Doze plus vendor ROMs otherwise suspend our threads within minutes.
+android.permissions = INTERNET, ACCESS_NETWORK_STATE, FOREGROUND_SERVICE, POST_NOTIFICATIONS, WAKE_LOCK, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 
 # (int) Android API to use  (targetSdkVersion AND compileSdkVersion)
 # note: when changing, Dockerfile also needs to be changed to install corresponding build tools
