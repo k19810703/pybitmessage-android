@@ -559,6 +559,42 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.34 ✅✅ 正式包（无热补丁）全项通过（2026-11-20 13:55）
+
+**包**：`/tmp/pybitmessage-2026-11-20.apk`（run 44681905358，个钥重签）
+sha256 `5b61650203ef2a91c689621aff96a0dae70a795daa2b818a1541dce3e5c19066`
+
+**关键前置**：安装后必须**删掉 `files/app/` 下的热补丁 `.py`**，否则它们会覆盖新包里的
+`.pyc`（本次发现残留 `main.py`、`android_keepalive.py` 两个）。
+
+**设备实测**：
+
+```
+$ adb shell ps -A | grep bitmessage
+... at.bitmessage.pybitmessage:service_pybitmessagesvc   ← 服务
+... at.bitmessage.pybitmessage                            ← UI
+
+JNI DETECTED / Fatal signal 6 次数: 0
+
+$ adb logcat -s python:* | grep -E "KEEPALIVE|SERVICE|INBOX"
+KEEPALIVE scheduled in 8.0s (main thread)
+INBOX loadMessagelist: 2 message(s)          ← 菜单 Inbox 有数据
+INBOX loadMessagelist: 2 message(s)          ← on_pre_enter 刷新
+KEEPALIVE: partial wake lock acquired
+KEEPALIVE active: wakeLock=True batteryExempt=False
+SERVICE startForegroundService(... -> core_service.py) issued, API 33
+SERVICE started pid=11367
+
+$ adb shell dumpsys activity services
+    isForeground=true foregroundId=1 foregroundNoti=Notification(channel=org.kivy.p4a1 ...)
+
+$ adb shell dumpsys power | grep pybitmessage:node
+  13:54:14.390 - ACQ pybitmessage:node (partial)      ← 单次获取，无重复
+```
+
+**结论**：M4.1（前台服务）、M4.3（WakeLock）、M3.9.1（菜单 Inbox）三项在**正式包**上
+全部生效，与热补丁验证结果一致。
+
 ### 1.33 ✅ 启动即崩已修复 + 菜单 Inbox 修复验证通过（2026-11-20 13:35）
 
 **症状**：装上 1.32 的包后 App 一启动就闪退。
