@@ -101,6 +101,11 @@ def alias_core_modules():
 
 
 SERVICE_ENTRYPOINT = 'core_service.py'
+# p4a derives the Java class from buildozer's ``services = name:entry``:
+# "pybitmessagesvc" becomes "<package>.ServicePybitmessagesvc" (verified with
+# aapt2 on the built APK). Using org.kivy.android.PythonService instead makes
+# ActivityManager fail with "Unable to start service Intent ... not found".
+SERVICE_CLASS = 'at.bitmessage.pybitmessage.ServicePybitmessagesvc'
 
 
 def start_keepalive_service():
@@ -124,30 +129,58 @@ def start_keepalive_service():
         from jnius import autoclass, cast
 
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        PythonService = autoclass('org.kivy.android.PythonService')
         Intent = autoclass('android.content.Intent')
         Context = autoclass('android.content.Context')
         Build = autoclass('android.os.Build$VERSION')
+        ServiceClass = autoclass(SERVICE_CLASS)
 
         activity = PythonActivity.mActivity
         if activity is None:
             print('SERVICE start skipped: no activity', flush=True)
             return
         context = cast(Context, activity)
+        # p4a unpacks the python bundle into <files>/app
+        app_root = context.getFilesDir().getPath() + '/app'
 
-        intent = Intent(context, PythonService)
-        intent.putExtra('serviceEntrypoint', SERVICE_ENTRYPOINT)
-        # p4a reads these when building the foreground notification.
-        intent.putExtra('androidPrivate', context.getFilesDir().getPath())
-        intent.putExtra('contentTitle', 'PyBitmessage')
-        intent.putExtra('contentText', '正在运行')
+        intent = Intent(context, ServiceClass)
+        # jnius resolves putExtra() overloads by Python type; a plain str may
+        # bind to putExtra(String, CharSequence) instead of (String, String),
+        # and Bundle.getString() then returns null. Wrapping in a real
+        # java.lang.String makes the (String, String) overload win.
+        JavaString = autoclass('java.lang.String')
+
+        def put(key, value):
+            intent.putExtra(JavaString(key), JavaString(value))
+
+        put('serviceEntrypoint', SERVICE_ENTRYPOINT)
+        put('androidPrivate', context.getFilesDir().getPath())
+        # PythonService.run() -> nativeStart(files, argument, entrypoint,
+        # name, home, path, serviceArgument) calls GetStringUTFChars() on
+        # every one of them; a single null aborts the process with
+        # "JNI DETECTED ERROR ... GetStringUTFChars received NULL jstring".
+        # So pass the same environment the UI process uses.
+        put('androidArgument', os.environ.get('ANDROID_ARGUMENT', ''))
+        put('pythonName', os.environ.get('PYTHON_NAME', 'python'))
+        put('pythonHome', os.environ.get('PYTHONHOME', '') or str(app_root))
+        put('pythonPath', os.environ.get('PYTHONPATH', '') or str(app_root))
+        # PythonService.onStartCommand() (p4a v2024.01.21, lines 75-84) also
+        # calls .equals() on some of these, so a missing key throws
+        #   NullPointerException: String.equals(...) on a null object
+        # at PythonService.java:82. serviceStartAsForeground must literally
+        # be "true" for doStartForeground() to run.
+        put('serviceStartAsForeground', 'true')
+        put('serviceTitle', 'PyBitmessage')
+        put('smallIconName', '')
+        put('contentTitle', 'PyBitmessage')
+        put('contentText', '正在运行')
+        put('pythonServiceArgument', '')
 
         if Build.SDK_INT >= 26:
             context.startForegroundService(intent)
         else:
             context.startService(intent)
-        print('SERVICE startForegroundService(%s) issued, API %d' % (
-            SERVICE_ENTRYPOINT, Build.SDK_INT), flush=True)
+        print('SERVICE startForegroundService(%s -> %s) issued, API %d' % (
+            SERVICE_CLASS, SERVICE_ENTRYPOINT, Build.SDK_INT), flush=True)
     except Exception as exc:  # noqa: BLE001 - never block startup
         print('SERVICE start failed: %r' % (exc,), flush=True)
 
