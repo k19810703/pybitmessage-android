@@ -52,6 +52,9 @@ requirements = python3,kivy,sqlite3,kivymd==1.0.2,Pillow,kivy-garden.qrcode,qrco
 orientation = portrait
 
 # (list) List of service to declare
+# (list) 前台服务（M4.1）：p4a 会在独立进程 <package>:service 里跑 core_service.py
+# 注意：这一行之后不能跟缩进的注释，否则会被当成续行吞掉（AGENTS §6 坑）
+services = pybitmessagesvc:core_service.py
 #services = NAME:ENTRYPOINT_TO_PY,NAME2:ENTRYPOINT2_TO_PY
 
 #
