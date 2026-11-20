@@ -93,7 +93,11 @@ fullscreen = 0
 # (list) Permissions
 # INTERNET is required both for P2P (TCP 8444) and for binding the local API
 # socket: Android's network sandbox denies socket() to apps without it.
-android.permissions = INTERNET, ACCESS_NETWORK_STATE
+# FOREGROUND_SERVICE (API 28+): without it startForeground() throws and the
+# keep-alive service dies immediately (M4.1c).
+# POST_NOTIFICATIONS (API 33+): needed for the service notification to be
+# visible at all; requested at runtime (M4.2.1).
+android.permissions = INTERNET, ACCESS_NETWORK_STATE, FOREGROUND_SERVICE, POST_NOTIFICATIONS
 
 # (int) Android API to use  (targetSdkVersion AND compileSdkVersion)
 # note: when changing, Dockerfile also needs to be changed to install corresponding build tools
@@ -272,7 +276,9 @@ p4a.branch = v2024.01.21
 #p4a.local_recipes =
 
 # (str) Filename to the hook for p4a
-#p4a.hook =
+# M4.1c: injects android:foregroundServiceType on the keep-alive service.
+# Path is relative to the directory buildozer runs in (PyBitmessage/).
+p4a.hook = packages/android/p4a_hook.py
 
 # (str) Bootstrap to use for android builds
 # p4a.bootstrap = sdl2

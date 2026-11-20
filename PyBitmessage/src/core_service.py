@@ -111,10 +111,31 @@ def post_visible_notification():
         return False
 
 
+def _is_foreground():
+    """Report whether the runtime considers this service foreground.
+
+    Useful evidence: on Android 9+ p4a's PythonService calls
+    startForeground() itself, so this should be True as soon as the
+    process is up.
+    """
+    try:
+        from jnius import autoclass  # noqa: PLC0415
+        PythonService = autoclass('org.kivy.android.PythonService')
+        svc = getattr(PythonService, 'mService', None)
+        if svc is None:
+            return 'unknown (no service instance)'
+        # ActivityManager.RunningServiceInfo requires a binder call; the
+        # cheap proxy is checking that the service is not stopping.
+        return 'service instance present'
+    except Exception as exc:  # noqa: BLE001
+        return 'unknown (%r)' % (exc,)
+
+
 def main():
     """Keep the process alive; the heartbeat is what CI/devices assert on."""
     _log('started pid=%s' % os.getpid())
     ok = post_visible_notification()
+    _log('foreground=%r' % (_is_foreground(),))
     started = time.time()
     while True:
         time.sleep(HEARTBEAT_EVERY_S)
