@@ -229,6 +229,41 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ---
 
+## 6.4 待验包（2026-11-20 13:42，**已准备好，未安装**）
+
+```
+本地路径: /tmp/pybitmessage-2026-11-20.apk   （个钥重签，可覆盖升级）
+SHA256  : 5b61650203ef2a91c689621aff96a0dae70a795daa2b818a1541dce3e5c19066
+CI 来源 : run 44681905358
+```
+
+**包含的全部修复**：
+
+| 修复 | 说明 |
+|---|---|
+| dandelion/api/protocol 三个 py3 崩溃 | 2026-11-19 公网测试发现 |
+| 前台服务（M4.1） | 服务进程 + 可见通知 + 权限齐全 |
+| WakeLock（M4.3） | 锁屏后连接保持；**去掉了 BroadcastReceiver**（会 JNI 崩溃） |
+| 启动崩溃修复 | Android 相关初始化改为 Kivy Clock 主线程延迟 8s 执行 |
+| 菜单 Inbox 修复（M3.9.1） | 原来从不查询数据库，现在能显示消息 |
+
+**验证命令（先问用户，再执行）**：
+
+```bash
+ADB=~/Documents/platform-tools/adb
+$ADB -s b45f8e87 push /tmp/pybitmessage-2026-11-20.apk /data/local/tmp/bm.apk
+$ADB -s b45f8e87 shell pm install -r -d /data/local/tmp/bm.apk
+$ADB -s b45f8e87 shell am force-stop at.bitmessage.pybitmessage   # 让热补丁失效
+$ADB -s b45f8e87 logcat -c
+$ADB -s b45f8e87 shell am start -n at.bitmessage.pybitmessage/org.kivy.android.PythonActivity
+sleep 70
+$ADB -s b45f8e87 shell "ps -A | grep bitmessage"          # 期望 2 个进程
+$ADB -s b45f8e87 logcat -d -s python:* | grep -E "KEEPALIVE|SERVICE|INBOX"
+$ADB -s b45f8e87 logcat -d | grep -c "JNI DETECTED"       # 期望 0
+```
+
+---
+
 ## 6.5 协作规则（用户明确要求，必须遵守）
 
 **任何涉及物理设备（平板 `b45f8e87`）的操作，必须先向用户确认，不要自行安装/卸载/清数据/重启 App。**
