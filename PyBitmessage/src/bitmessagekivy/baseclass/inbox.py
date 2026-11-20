@@ -84,28 +84,33 @@ class Inbox(Screen):
 
         try:
             rows = sqlQuery(
-                "SELECT msgid, subject FROM inbox WHERE subject LIKE 'b''%'")
+                'SELECT msgid, subject, message FROM inbox '
+                "WHERE subject LIKE 'b''%' OR message LIKE 'b''%'")
         except Exception as exc:  # noqa: BLE001
             print('INBOX migration query failed: %r' % (exc,), flush=True)
             return 0
+
+        def _as_text(value):
+            if isinstance(value, (bytes, bytearray)):
+                return bytes(value).decode('utf-8', 'replace')
+            return '' if value is None else str(value)
+
         fixed = 0
-        for msgid, subject in rows:
-            try:
-                text = subject.decode('utf-8') if isinstance(
-                    subject, (bytes, bytearray)) else str(subject)
-            except Exception:  # noqa: BLE001
+        for msgid, subject, message in rows:
+            old_subject, old_message = _as_text(subject), _as_text(message)
+            new_subject = _bidi_safe_text(old_subject)
+            new_message = _bidi_safe_text(old_message)
+            if new_subject == old_subject and new_message == old_message:
                 continue
-            repaired = _bidi_safe_text(text)
-            if repaired != text:
-                try:
-                    sqlExecute('UPDATE inbox SET subject=? WHERE msgid=?',
-                               repaired, msgid)
-                    fixed += 1
-                except Exception as exc:  # noqa: BLE001
-                    print('INBOX migration update failed: %r' % (exc,),
-                          flush=True)
+            try:
+                sqlExecute(
+                    'UPDATE inbox SET subject=?, message=? WHERE msgid=?',
+                    new_subject, new_message, msgid)
+                fixed += 1
+            except Exception as exc:  # noqa: BLE001
+                print('INBOX migration update failed: %r' % (exc,), flush=True)
         if fixed:
-            print('INBOX migrated %d legacy subject(s)' % fixed, flush=True)
+            print('INBOX migrated %d legacy row(s)' % fixed, flush=True)
         return fixed
 
     def _render(self, messages):
