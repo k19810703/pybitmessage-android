@@ -559,6 +559,35 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.29 ❌ M4.1d 设备验证失败：服务从未被启动（2026-11-20 11:16）
+
+**设备**：小米平板 5（`b45f8e87`），装 run 44659795746 的包（个钥重签，免卸载升级）。
+
+| 检查项 | 期望 | 实际 | 结论 |
+|---|---|---|---|
+| 升级安装 | `pm install -r -d` 成功 | ✅ Success，数据保留（`knownnodes.dat` 仍是 11-19 15:16） | ✅ |
+| 主进程 | 存在 | ✅ `at.bitmessage.pybitmessage`（pid 16444） | ✅ |
+| **`:service_pybitmessagesvc` 进程** | 存在 | ❌ **不存在** | ❌ |
+| **已注册服务** | 1 个 | ❌ `dumpsys activity services` → `(nothing)` | ❌ |
+| SERVICE 日志 | `SERVICE started / heartbeat` | ❌ 无 | ❌ |
+
+**根因（已确认）**：`core_service.pyc` **确实被打进了 APK**
+（logcat：`extracting core_service.pyc` + `extracting pybitmessage/core_service.pyc`），
+但 **p4a 只负责"声明"服务，不会自动"启动"它**。启动需要从 Java 侧或 Python 侧调用
+`startService()/startForegroundService()`，本项目从未调用。
+
+**这是 M4.1 阶段的真实缺口**，不是打包问题。修复方向（下一阶段 M4.1e）：
+
+1. 在 `src/main.py` 启动后，用 pyjnius 调
+   `PythonActivity.mActivity.startForegroundService(intent)`，intent 指向
+   `org.kivy.android.PythonService`，extra 里带 `serviceEntrypoint`（p4a 约定）
+2. 或者在 Java 侧 Activity 里 `onCreate` 时 `startService`
+
+**附带确认的好消息**：
+
+- 免卸载升级链路可用（个钥重签 + `pm install -r -d`，数据无损）
+- 核心在网络正常工作（`netstat` 22 条 ESTABLISHED）
+
 ### 1.28 ✅ M4.1c 完成：前台服务所需权限已齐（2026-11-20 10:35）
 
 **结论先行**：`android:foregroundServiceType` 在本项目**当前不需要**——它是

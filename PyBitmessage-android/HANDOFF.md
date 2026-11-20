@@ -16,28 +16,30 @@
 | M4.1a | `src/core_service.py` 服务入口 | ✅ **完成**（CI 已出包） |
 | M4.1b | `buildozer.spec` 声明 `services=` | ✅ **完成，aapt2 已验证**：manifest 含 `ServicePybitmessagesvc` + `android:process=":service_pybitmessagesvc"` |
 | M4.1c | 前台服务所需的权限（`FOREGROUND_SERVICE` / `POST_NOTIFICATIONS`） | ✅ **完成**，run 44659795746，aapt2 已确认 |
-| M4.1d | 设备验证：通知可见、`:service` 进程、退 UI 后存活 | ⬜ **待做（需平板接 USB）** |
+| M4.1d | 设备验证 | ❌ **失败**：`:service` 进程不存在、无已注册服务、无 SERVICE 日志（EVIDENCE §1.29） |
+| **M4.1e** | **启动时拉起服务**（下一阶段） | ⬜ p4a 只"声明"服务，**从不启动**。需在 `src/main.py` 用 pyjnius `startForegroundService(intent)` |
 
-> 证据：EVIDENCE.md **§1.27**（a/b）、**§1.28**（c）
+> 证据：EVIDENCE.md **§1.27**（a/b）、**§1.28**（c）、**§1.29**（d 失败与根因）
 
-**§1.28 的更正**：`android:foregroundServiceType` 在 **targetSdk 33 下不需要**
-（API 34 才强制），所以不需要 p4a hook。spec 里已留注释说明何时要重新加。
+**M4.1e 的具体做法（下一阶段照此执行）**：
 
-**下一个动作（平板一接上就能做）**：
-
-```bash
-# 装最新包（run 44659795746，已下载在 /tmp/apk-m41c）
-APK=/tmp/apk-m41c/pybitmessage-apk-31/pybitmessage-0.1.2-arm64-v8a-debug.apk
-ADB=~/Documents/platform-tools/adb
-$ADB -s b45f8e87 push $APK /data/local/tmp/bm.apk
-$ADB -s b45f8e87 shell pm install -r -d /data/local/tmp/bm.apk   # 需个钥重签过
-$ADB -s b45f8e87 logcat -c
-$ADB -s b45f8e87 shell am start -n at.bitmessage.pybitmessage/org.kivy.android.PythonActivity
-sleep 30
-$ADB -s b45f8e87 shell "ps -A | grep pybitmessage"   # 期望两行：主进程 + :service_pybitmessagesvc
-$ADB -s b45f8e87 logcat -d -s python:* | grep SERVICE # 期望 started / heartbeat / visible notification posted
-$ADB -s b45f8e87 exec-out screencap -p > /tmp/notif.png   # 通知栏可见性（S）
+```python
+# src/main.py，核心启动之后
+from jnius import autoclass
+PythonActivity = autoclass('org.kivy.android.PythonActivity')
+PythonService = autoclass('org.kivy.android.PythonService')
+Intent = autoclass('android.content.Intent')
+ctx = PythonActivity.mActivity
+intent = Intent(ctx, PythonService)
+intent.putExtra('serviceEntrypoint', 'core_service.py')
+if Build.VERSION.SDK_INT >= 26:
+    ctx.startForegroundService(intent)
+else:
+    ctx.startService(intent)
 ```
+
+**已验证的好消息**：个钥重签 + `pm install -r -d` 免卸载升级可用，数据无损
+（`knownnodes.dat` mtime 未变）；核心联网正常（22 条 ESTABLISHED）。
 
 **设计取舍（勿混淆）**：M4.1 只解决「进程不被杀」。**不要**把 Bitmessage 核心搬进
 service 进程——两个进程会争单实例锁和同一份数据文件，这件事留到 M4.3 之后单独评估。
