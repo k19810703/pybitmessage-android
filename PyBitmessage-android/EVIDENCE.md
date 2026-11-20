@@ -559,6 +559,48 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.31 ◐ M4.3 进行中：WakeLock 生效，锁屏 5 分钟连接保持（2026-11-20 12:05）
+
+**实现**：新增 `src/android_keepalive.py`（partial wake lock + 电池优化豁免引导），
+`buildozer.spec` 加 `WAKE_LOCK` / `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`。
+
+**设备实测**（run 44669834948 的包，平板）：
+
+```
+$ adb logcat -s python:* | grep KEEPALIVE
+KEEPALIVE: partial wake lock acquired
+KEEPALIVE: screen receiver failed: ... BroadcastReceiver is not an interface
+KEEPALIVE: ignoring battery optimizations = False
+KEEPALIVE: battery exemption prompt shown
+
+$ adb shell dumpsys power | grep pybitmessage
+PARTIAL_WAKE_LOCK 'pybitmessage:node' ACQ=-1m2s73ms LONG (pkg=at.bitmessage.pybitmessage)
+  ← 系统确认 wake lock 真的持有
+```
+
+**锁屏对照测试**（`input keyevent KEYCODE_POWER`，`mWakefulness=Asleep`）：
+
+| 时刻 | ESTABLISHED | 进程数 | wakeLock |
+|---|---|---|---|
+| 锁屏前 | 15 | 2 | 1 |
+| t+1min | 16 | 2 | 2 |
+| t+2min | 12 | 2 | 2 |
+| t+3min | 12 | 2 | 2 |
+| t+4min | 12 | 2 | 2 |
+| t+5min | 11 | 2 | 2 |
+
+**结论**：锁屏期间连接稳定保持（11–16 条），两个进程存活，wake lock 全程持有。
+对比 2026-11-19 锁屏后 App 被 MIUI 完全冻结（UDP `PermissionError`、API 无响应），
+这是决定性改善。
+
+**待修/待验**：
+
+1. `BroadcastReceiver` 是抽象**类**不是接口，pyjnius 要用 `JavaClass` 而不是
+   `__javainterfaces__`（已提交修复 `2232beb`，待出包验证）；不影响 wake lock 本身
+2. **D5 完整验收（锁屏 30 分钟仍能收到消息）尚未做**，需要在锁屏期间从 Mac 发一条
+3. 电池优化豁免弹窗会跳 `com.miui.powerkeeper/HiddenAppsConfigActivity`，
+   **需要用户在平板上手动确认**才能进白名单
+
 ### 1.30 ✅✅ M4.1e 通过：前台服务真正跑起来（2026-11-20 11:42）
 
 **设备实测**（小米平板 5，`main.py` 热补丁后重启）：
