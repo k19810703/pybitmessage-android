@@ -12,6 +12,46 @@ from kivy.uix.screenmanager import Screen
 from pybitmessage.bitmessagekivy.baseclass.common import kivy_state_variables, load_image_path
 
 
+_CJK_FONTS = (
+    '/system/fonts/NotoSansCJK-Regular.ttc',
+    '/system/fonts/NotoSansSC-Regular.otf',
+    '/system/fonts/DroidSansFallback.ttf',
+    '/system/fonts/NotoSansCJKsc-Regular.otf',
+)
+_cjk_font_name = None
+
+
+def _cjk_font():
+    """A font name that can render Chinese, registered if necessary.
+
+    Do NOT read messaging.FONT: the APK ships two copies of the messaging
+    module (bitmessagekivy/ and pybitmessage/bitmessagekivy/) and the
+    MessagingScreen that registers the CJK font lives in the other one, so
+    this module's copy still says 'Roboto' -- which is exactly why every
+    Chinese character came out as a tofu box. Register locally instead;
+    LabelBase.register is idempotent for the same name.
+    """
+    global _cjk_font_name
+    if _cjk_font_name:
+        return _cjk_font_name
+    from kivy.core.text import LabelBase
+    import os
+    for path in _CJK_FONTS:
+        if os.path.exists(path):
+            try:
+                LabelBase.register(name='CJK', fn_regular=path)
+                _cjk_font_name = 'CJK'
+                print('INBOX cjk font registered from %s' % path, flush=True)
+                return _cjk_font_name
+            except Exception as exc:  # noqa: BLE001
+                print('INBOX font register failed %s: %r' % (path, exc),
+                      flush=True)
+                continue
+    _cjk_font_name = 'Roboto'
+    print('INBOX no CJK font found, falling back to Roboto', flush=True)
+    return _cjk_font_name
+
+
 class Inbox(Screen):
     """Inbox Screen class for Kivy UI"""
 
@@ -126,33 +166,29 @@ class Inbox(Screen):
             return
         from kivy.metrics import dp
         from kivy.uix.boxlayout import BoxLayout
-        from kivymd.uix.label import MDLabel
-        from pybitmessage.bitmessagekivy.messaging import FONT
+        from kivy.uix.label import Label
 
+        # Native Label, not MDLabel: MDLabel applies the theme font and
+        # ignores font_name for its text style, which is why the rows stayed
+        # as tofu boxes even after the CJK font was registered. messaging.py
+        # gets Chinese right with plain Label for the same reason.
+        font = _cjk_font()
         ml.clear_widgets()
         if not messages:
-            ml.add_widget(MDLabel(
-                text=self.label_str, halign='center',
-                theme_text_color='Secondary'))
+            ml.add_widget(Label(
+                text=self.label_str, font_name=font,
+                color=(.5, .5, .5, 1)))
             return
         for from_addr, subject, body, received in messages:
             title = subject or (body[:32] + ('…' if len(body) > 32 else ''))
             row = BoxLayout(
                 orientation='vertical', size_hint_y=None, height=dp(72),
                 padding=(dp(8), dp(6)), spacing=dp(2))
-            row.add_widget(MDLabel(
-                text=str(title), font_name=FONT, font_size='16sp',
-                size_hint_y=None, height=dp(26),
-                shorten=True, shorten_from='right'))
-            row.add_widget(MDLabel(
-                text='来自 %s' % from_addr, font_name=FONT,
-                font_size='12sp', size_hint_y=None, height=dp(20),
-                theme_text_color='Secondary'))
-            row.add_widget(MDLabel(
-                text=_preview(body), font_name=FONT, font_size='13sp',
-                size_hint_y=None, height=dp(18),
-                theme_text_color='Primary', shorten=True,
-                shorten_from='right'))
+            row.add_widget(_text_label(title, font, 16, (0.1, 0.1, 0.1, 1)))
+            row.add_widget(_text_label('来自 %s' % from_addr, font, 12,
+                                       (0.45, 0.45, 0.45, 1)))
+            row.add_widget(_text_label(_preview(body), font, 13,
+                                       (0.25, 0.25, 0.25, 1)))
             _bind_tap(row, self._open_detail, from_addr, subject, body,
                       received)
             ml.add_widget(row)
@@ -163,10 +199,15 @@ class Inbox(Screen):
         from kivymd.uix.dialog import MDDialog
 
         content = _detail_content(from_addr, subject, body, received)
+        # The dialog title and button are rendered by MDDialog/MDFlatButton
+        # with the theme font, which has no CJK glyphs here -- pass ours so
+        # '消息详情' and '关闭' are not tofu boxes.
         dialog = MDDialog(
             title='消息详情', type='custom', content_cls=content,
+            font_name=_cjk_font(),
             buttons=[MDFlatButton(
-                text='关闭', on_release=lambda *_: dialog.dismiss())])
+                text='关闭', font_name=_cjk_font(),
+                on_release=lambda *_: dialog.dismiss())])
         dialog.open()
         print('INBOX open detail from=%s len(body)=%d' % (
             from_addr, len(body or '')), flush=True)
@@ -212,34 +253,27 @@ def _bidi_safe_text(value):
 
 
 def _bind_tap(widget, callback, *args):
-    """Call ``callback(*args)`` on a short tap of ``widget``.
+    """Call ``callback(*args)`` when ``widget`` is tapped.
 
-    Kivy BoxLayout has no on_press; touch_down/up within a small distance is
-    the usual idiom and avoids firing on scroll gestures.
+    BoxLayout does not dispatch touch by itself (it has no ButtonBehavior),
+    so the earlier on_touch_down/up binding never fired on the device. Make
+    the row a ButtonBehaviour mixin instead: that is what actually receives
+    press/release, and it still works for a plain layout.
     """
-    state = {'x': 0, 'y': 0, 'inside': False}
+    from kivy.uix.behaviors import ButtonBehavior
 
-    def on_touch_down(_w, touch):
-        if not widget.collide_point(*touch.pos):
-            return False
-        state['x'], state['y'] = touch.pos
-        state['inside'] = True
-        return False
+    class _TappableRow(ButtonBehavior, type(widget)):
+        pass
 
-    def on_touch_up(_w, touch):
-        if not state['inside'] or not widget.collide_point(*touch.pos):
-            state['inside'] = False
-            return False
-        state['inside'] = False
-        dx, dy = abs(touch.pos[0] - state['x']), abs(touch.pos[1] - state['y'])
-        if dx < 20 and dy < 20:  # a tap, not a drag/scroll
-            try:
-                callback(*args)
-            except Exception as exc:  # noqa: BLE001
-                print('INBOX tap handler failed: %r' % (exc,), flush=True)
-        return False
+    widget.__class__ = _TappableRow
+    widget.bind(on_release=lambda *_a: _safe_call(callback, *args))
 
-    widget.bind(on_touch_down=on_touch_down, on_touch_up=on_touch_up)
+
+def _safe_call(callback, *args):
+    try:
+        callback(*args)
+    except Exception as exc:  # noqa: BLE001
+        print('INBOX tap handler failed: %r' % (exc,), flush=True)
 
 
 def _detail_content(from_addr, subject, body, received):
@@ -249,30 +283,50 @@ def _detail_content(from_addr, subject, body, received):
     from kivy.metrics import dp
     from kivy.uix.boxlayout import BoxLayout
     from kivy.uix.scrollview import ScrollView
-    from kivymd.uix.label import MDLabel
-    from pybitmessage.bitmessagekivy.messaging import FONT
 
+    font = _cjk_font()
     root = BoxLayout(orientation='vertical', spacing=dp(6),
                      size_hint_y=None, height=dp(320))
     meta = [
-        ('主题', _bidi_safe_text(subject or '（无主题）')),
-        ('来自', from_addr),
+        ('主题', _bidi_safe_text(subject or '（无主题）'), (0.1, .1, .1, 1)),
+        ('来自', from_addr, (.45, .45, .45, 1)),
         ('时间', time.strftime('%Y-%m-%d %H:%M:%S',
-                               time.localtime(int(received or 0)))),
+                               time.localtime(int(received or 0))),
+         (.45, .45, .45, 1)),
     ]
-    for key, value in meta:
-        root.add_widget(MDLabel(
-            text='%s：%s' % (key, value), font_name=FONT, font_size='13sp',
-            size_hint_y=None, height=dp(22),
-            theme_text_color='Secondary' if key != '主题' else 'Primary'))
+    for key, value, colour in meta:
+        root.add_widget(_text_label('%s：%s' % (key, value), font, 13, colour))
     scroll = ScrollView(size_hint=(1, None), height=dp(200))
     root.add_widget(scroll)
     msg_box = BoxLayout(orientation='vertical', size_hint_y=None,
                         spacing=dp(4))
     msg_box.bind(minimum_height=msg_box.setter('height'))
     scroll.add_widget(msg_box)
-    msg_box.add_widget(MDLabel(
-        text=_bidi_safe_text(body or '（空消息）'), font_name=FONT,
-        font_size='15sp', size_hint_y=None,
-        text_size=(dp(260), None), valign='top'))
+    msg_box.add_widget(_text_label(
+        _bidi_safe_text(body or '（空消息）'), font, 15, (.1, .1, .1, 1),
+        wrap=True, width=dp(260)))
     return root
+
+
+def _text_label(text, font, size, colour, wrap=False, width=None):
+    """Native Label sized to its text; MDLabel would ignore our font."""
+    from kivy.metrics import dp
+    from kivy.uix.label import Label
+
+    from kivy.uix.label import Label
+
+    lbl = Label(
+        text=text, font_name=font, font_size=dp(size), color=colour,
+        size_hint_y=None, halign='left', valign='middle',
+        shorten=True, shorten_from='right')
+    lbl.height = dp(size + 8)
+    if wrap:
+        lbl.shorten = False
+        lbl.valign = 'top'
+        lbl.text_size = (width, None)
+        lbl.bind(texture_size=lambda i, v: setattr(i, 'height', v[1]))
+        lbl.bind(size=lambda i, v: setattr(i, 'text_size', (v[0], None)))
+    else:
+        # text_size must follow the widget width or halign/shorten do nothing
+        lbl.bind(size=lambda i, v: setattr(i, 'text_size', (v[0], None)))
+    return lbl
