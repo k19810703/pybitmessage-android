@@ -559,6 +559,41 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.36 ✅✅ M3.9.1a/b/c 全部完成：收件箱三个缺陷闭环（2026-11-22 20:46）
+
+**包**：`/tmp/pybitmessage-body-2026-11-20.apk`（run 44686653091，个钥重签，
+sha256 `fc0709fffb94a403905d09597c6c971f02f9fc8bc3049506c0c3fbcffc7d6a86`）
+注：因公司网访问 GitHub 受限，本次经 `proxy.apj.ibm.com:8080` 下载（后续下载都走此代理）。
+
+**设备实测**：
+
+```
+INBOX migrated 1 legacy row(s)          ← 正文迁移执行
+INBOX loadMessagelist: 2 message(s)
+INBOX open detail from=BM-2cXj6bteso… len(body)=7   ← 点击打开详情（"Hellow!" 7 字符）
+KEEPALIVE active: wakeLock=True batteryExempt=False
+SERVICE started pid=21088
+JNI 崩溃: 0 次
+```
+
+**迁移后数据库终态**（之前标题和正文都是 `b'...'` repr）：
+
+```
+时间: 2026-11-20 09:56
+  标题: test form sjy
+  正文: Hellow!
+
+时间: 2026-11-19 20:14
+  标题: 公网测试 1
+  正文: hello via public network, from Mac at home (19:52) 中文+emoji 🎉
+```
+
+| 缺陷 | 结果 |
+|---|---|
+| (a) 点消息无反应 | ✅ 点击弹出详情（日志确认） |
+| (b) 地址旁豆腐块 | ✅ 已移除图标字体依赖（纯 MDLabel + CJK 字体） |
+| (c) 历史 bytes repr | ✅ 标题 + 正文都迁移为正常文本 |
+
 ### 1.35 ◐ M3.9.1a/b/c：收件箱三个 UI 缺陷修复（2026-11-20 14:05，待设备验证）
 
 **用户实测发现**（clean 包，2026-11-20 13:59 截图）：

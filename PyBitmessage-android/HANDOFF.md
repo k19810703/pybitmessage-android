@@ -246,16 +246,20 @@ run    44685032281
 菜单 Inbox 能列消息、**点开消息弹详情**（日志 `INBOX open detail ... len(body)=101`）、
 历史标题已修复为 `公网测试 1`。
 
-### 待完成的下一步（回来后第一件事）
+### 下一步（2026-11-22 20:50 更新）
 
-**CI run `44686653091`**（M3.9.1c：把历史数据迁移扩展到**正文**）——
-推送后构建约 10 分钟，用户暂停时可能已出包。回来后：
+**M3.9.1a/b/c 已全部完成并设备验证**（EVIDENCE §1.36）。平板当前跑的是
+run 44686653091 的包（`/tmp/pybitmessage-body-2026-11-20.apk`）。
 
-1. `gh run list --repo k19810703/pybitmessage-android --limit 1` 看是否 success
-2. 下载 + `scripts/resign-apk.sh` 重签
-3. **先问用户**再安装（HANDOFF §6.5 规则）
-4. 装完验证：之前那条「公网测试 1」的**正文**应从
-   `b'hello via public network...'` 变成正常文本
+**网络注意**：公司网访问 GitHub 需走代理 `proxy.apj.ibm.com:8080`
+（`export HTTPS_PROXY=http://proxy.apj.ibm.com:8080`），gh api 下载 artifact 可用。
+
+**剩余任务**（按优先级）：
+1. M4.2 通知权限运行时申请（Android 13+）
+2. M4.4–M4.7（持久化校验、禁备份、私钥加密、崩溃自恢复、电量）
+3. M4.8.x 缺陷收编（singleCleaner 崩溃、skipUntil 等）
+4. D5 锁屏 30 分钟验收（用户说最后做）
+5. M5 交付、M6 全界面中文化
 
 ### 仍未做的
 
