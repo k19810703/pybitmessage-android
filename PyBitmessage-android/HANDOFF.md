@@ -232,6 +232,68 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ---
 
+## 6.2 ⏸ 最新暂停点（2026-11-22 21:10）—— **新 session 从这里开始**
+
+### 平板现状（重要：带热补丁）
+
+平板当前跑的是 **run 44686653091 的包**，外加**一个热补丁文件**：
+
+```
+files/app/pybitmessage/bitmessagekivy/baseclass/inbox.py   ← 热补丁，尚未出包
+```
+
+**如果不重新出包，这个热补丁会一直生效**；一旦装新包，必须重新打补丁或等新包包含修复。
+
+### 本阶段成果
+
+| 项 | 状态 |
+|---|---|
+| 收件箱**中文乱码（豆腐块）** | ✅ **已修复并截图验证**（`公网测试 1`、`来自 BM-2c…` 正常） |
+| 历史 bytes repr（标题+正文） | ✅ 已迁移（`公网测试 1` / `hello via public network… 中文+emoji 🎉`） |
+| 收件箱列表左对齐、超长截断 | ✅ 正常 |
+| **点击消息打开详情** | ❌ **仍未生效**（见下方待办） |
+
+### 中文乱码的三个根因（已修，勿重踩）
+
+1. **APK 里有两份 `messaging` 模块**（`bitmessagekivy/` 和 `pybitmessage/bitmessagekivy/`）。
+   注册中文字体的 `MessagingScreen` 在另一份里，所以 `from ...messaging import FONT`
+   拿到的永远是 `'Roboto'`。→ inbox 现在**自己注册** `/system/fonts/NotoSansCJK-Regular.ttc`
+2. **`MDLabel` 会忽略 `font_name`**（用主题字体）。→ 改用**原生 `Label`**
+   （主界面一直用的是原生 Label，所以它一直正常）
+3. **`text_size` 必须跟随控件宽度**，否则 `halign`/`shorten` 不生效。
+
+### 下一步（按优先级）
+
+**1. 修「点击消息打开详情」**（唯一未完成项）
+
+现状：`BoxLayout` 没有 `ButtonBehavior` 收不到触摸；已尝试 `widget.__class__` 改成
+`ButtonBehavior` mixin，但**点击仍未触发**（日志无 `INBOX open detail`）。
+
+建议方案 A（把握最高）：把每行换成原生 **`Button`**：
+
+```python
+btn = Button(background_normal='', background_color=(1,1,1,1),
+             size_hint_y=None, height=dp(72))
+btn.add_widget(inner_boxlayout)   # Button 可容纳子控件
+btn.bind(on_release=lambda *_: self._open_detail(...))
+```
+
+验证：点击后 `adb logcat -s python:* | grep "INBOX open detail"` 应出现。
+
+**2. 把当前代码出正式包**（包含中文字体修复，去掉对热补丁的依赖）
+
+**3. 其余任务**：M4.2 通知权限、M4.4–M4.7、M4.8.x、D5 锁屏验收、M5、M6
+
+### 环境笔记
+
+- **GitHub 需走代理**：`export HTTPS_PROXY=http://proxy.apj.ibm.com:8080`，
+  然后 `gh api repos/k19810703/pybitmessage-android/actions/artifacts/<id>/zip` 可直接下载
+- **热补丁路径必须是** `files/app/pybitmessage/bitmessagekivy/...`（带 `pybitmessage/` 前缀），
+  打到 `files/app/bitmessagekivy/...` **不生效**（本次踩过）
+- 平板数据备份：`/tmp/bk_keys_body.dat`（2 个地址）、`/tmp/bk_msgs_body.dat`
+
+---
+
 ## 6.3 当前进度快照（2026-11-20 14:20，用户移动中暂停）
 
 ### 已装到平板的包

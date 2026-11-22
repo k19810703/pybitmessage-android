@@ -559,6 +559,31 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.37 ✅ 收件箱中文乱码修复 / ❌ 点击详情仍失败（2026-11-22 21:10）
+
+**用户截图反馈**：列表和详情里中文全是 □（豆腐块），英文正常。
+说明**数据已正确**（迁移成功），是**字体渲染**问题。
+
+**三个根因（层层嵌套，逐个用设备日志/截图确认）**：
+
+| # | 发现方式 | 根因 | 修复 |
+|---|---|---|---|
+| 1 | 加 `print` 诊断 | `INBOX font lookup -> 'Roboto'`。APK 打包了**两份** `messaging` 模块，注册 CJK 字体的 `MessagingScreen` 在 `bitmessagekivy/`，而 inbox 导入的是 `pybitmessage/bitmessagekivy/`，那份的 `FONT` 永远是默认值 | inbox **本地注册** `LabelBase.register('CJK', '/system/fonts/NotoSansCJK-Regular.ttc')`（日志：`INBOX cjk font registered from …`） |
+| 2 | 截图对比 | 字体注册后**仍显示 □** —— `MDLabel` 走主题字体，忽略 `font_name` | 改用**原生 `Label`**（与 `messaging.py` 主界面一致，主界面中文一直正常） |
+| 3 | 截图 | 文字居中、地址被截断 | `text_size` 绑定控件宽度，`halign`/`shorten` 才生效 |
+
+**验证**：截图确认 `公网测试 1`、`来自 BM-2cXj6bteso…` 均正常显示中文，左对齐、截断正确。
+
+**未解决：点击消息打开详情**
+
+- 尝试 1：`on_touch_down/up` 绑定 → 无效（`BoxLayout` 无 `ButtonBehavior`，不派发触摸）
+- 尝试 2：`widget.__class__ = ButtonBehavior mixin` → **仍无效**，日志无 `INBOX open detail`
+- 怀疑：行控件在 `MDList` / `ScrollView` 内，触摸被上层拦截
+- 建议：改用原生 `Button`（`background_normal=''`，内嵌 BoxLayout 放文字）
+
+**平板当前带热补丁**：`files/app/pybitmessage/bitmessagekivy/baseclass/inbox.py`，
+该修复**尚未出正式包**。
+
 ### 1.36 ✅✅ M3.9.1a/b/c 全部完成：收件箱三个缺陷闭环（2026-11-22 20:46）
 
 **包**：`/tmp/pybitmessage-body-2026-11-20.apk`（run 44686653091，个钥重签，
