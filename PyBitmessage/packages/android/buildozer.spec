@@ -247,7 +247,12 @@ android.archs = arm64-v8a
 # android.numeric_version = 1
 
 # (bool) enables Android auto backup feature (Android API >=23)
-android.allow_backup = True
+# M4.5.1: MUST stay False. keys.dat holds the address private keys in
+# plain text (encrypted storage is M4.5.2, not done yet), and with
+# allowBackup=true Android ships the whole app data to the vendor's cloud
+# on every backup run. The baseline APK was verified to carry
+# allowBackup=true, i.e. keys were cloud-backup-eligible until now.
+android.allow_backup = False
 
 # (str) XML file for custom backup rules (see official auto backup documentation)
 # android.backup_rules =
