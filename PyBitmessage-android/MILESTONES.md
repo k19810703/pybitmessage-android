@@ -290,7 +290,7 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.2.1 | 通知权限（Android 13+） | `POST_NOTIFICATIONS` 运行时申请 | 3h | **S**：首次启动有授权弹窗；拒绝后 App 不崩 |
 | M4.3.1 | WakeLock + Doze 白名单引导 | `src/android_keepalive.py`（partial wake lock + 豁免引导）；`WAKE_LOCK` / `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 权限 | **L**：`dumpsys power` 见 `pybitmessage:node`；锁屏 5 分钟连接稳定 ≥11 | ◐ **部分通过**（EVIDENCE §1.31）：wake lock ✅、锁屏连接保持 ✅；待修 BroadcastReceiver 声明 + 待做 D5 30 分钟收消息验收 |
 | M4.4.1 | 数据持久化与恢复 | 校验 `keys.dat`/`messages.dat` 完整性 | 4h | **F**：`am force-stop` 后重启，D1/D6 仍成立 |
-| M4.5.1 | 禁用云备份 | `android:allowBackup=false`（manifest 或 spec） | 1h | **A**：`aapt2 dump badging` 无 `allowBackup=true` |
+| M4.5.1 ✅ | 禁用云备份 | `android.allow_backup = False`（spec） | 1h | **A**：aapt2 确认 `allowBackup=false`（run 45096582390，EVIDENCE §1.40） |
 | M4.5.2 | 私钥加密（Keystore 派生密钥） | 新增 `keystore.py`，启动时解密 `keys.dat` | 8h | **F**：`keys.dat` 中无私钥明文；App 能正常启动并解密 |
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |
 | M4.7.1 | 电量策略（仅 Wi-Fi/充电同步） | 设置项 + 网络策略 | 4h | **T**：1 小时后台耗电 ≤ 8%（C3） |

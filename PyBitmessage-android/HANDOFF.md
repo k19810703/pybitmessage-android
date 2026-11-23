@@ -264,10 +264,10 @@ run     : 45094228488（commit b44b7b9）
 
 | 顺序 | 任务 | 说明 |
 |---|---|---|
-| 1 | **M4.5.1 禁用云备份** | `allowBackup=false`，私钥不该进云端，1 小时 |
-| 2 | **M4.8.2 skipUntil 吞 getdata** | 消息「发出但永不送达」的根因，最影响可用性 |
-| 3 | **M4.8.1 singleCleaner 崩溃** | knownnodes 不落盘，重启后重新找节点 |
-| 4 | **M6 界面中文化** | 菜单 Sent/Draft/Trash/Settings 等仍是英文 |
+| ~~1~~ | ~~M4.5.1 禁用云备份~~ | ✅ 已完成（EVIDENCE §1.40），待装机：`/tmp/pybitmessage-m451.apk` |
+| 1 | **M4.8.2 skipUntil 吞 getdata** | 消息「发出但永不送达」的根因，最影响可用性 |
+| 2 | **M4.8.1 singleCleaner 崩溃** | knownnodes 不落盘，重启后重新找节点 |
+| 3 | **M6 界面中文化** | 菜单 Sent/Draft/Trash/Settings 等仍是英文 |
 | 5 | M4.2.1 通知权限 | 新消息通知 |
 | 6 | D5 锁屏 30 分钟验收 → M5 交付 | 用户说最后做 |
 

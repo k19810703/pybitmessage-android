@@ -559,6 +559,28 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.40 ✅ M4.5.1 完成：allowBackup=false，私钥不再进云备份（2026-11-23 10:02）
+
+**问题**（aapt2 实测基线包）：
+
+```
+android:allowBackup(0x01010280)=true    ← keys.dat 的明文私钥有资格进厂商云备份
+```
+
+**修复**：`buildozer.spec` 的 `android.allow_backup = False`（commit `a4c1417`）。
+
+**验收（A）**——run 45096582390 出包，aapt2 确认：
+
+```
+android:allowBackup(0x01010280)=false   ✅
+```
+
+包：`/tmp/pybitmessage-m451.apk`（个钥重签，
+sha256 `3c31284a3cb40eaec906853bd9c8a89914caabfb8a57458905477bbc27a1d710`）
+
+**说明**：这是 M4.5.2（Keystore 私钥加密）之前的必要止血——在私钥还是明文存储的
+阶段，唯一正确的做法是完全退出备份。设备装机验证待用户确认后进行。
+
 ### 1.39 ✅✅ 稳定基线包：零热补丁，全部功能设备验证通过（2026-11-23 09:42）
 
 **背景**：此前平板靠 3 个热补丁文件运行（inbox.py / msg_composer.py / mpybit.py），
