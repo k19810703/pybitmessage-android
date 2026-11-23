@@ -182,28 +182,47 @@ class Inbox(Screen):
             return
         for from_addr, subject, body, received in messages:
             title = subject or (body[:32] + ('…' if len(body) > 32 else ''))
-            # A native Button, not a BoxLayout: inside an MDList/ScrollView a
-            # plain layout never receives the touch (a ButtonBehaviour mixin
-            # did not help either). Button has its own touch dispatch, so the
-            # tap reliably reaches on_release. The visual is flattened by
-            # clearing background_normal and making the button white.
-            row = Button(
-                size_hint_y=None, height=dp(76),
-                background_normal='', background_down='',
-                background_color=(1, 1, 1, 1))
-            content = BoxLayout(
+            # Plain BoxLayout rows -- they render correctly (verified). The
+            # tap is picked up by the MDList-level handler installed in
+            # _install_row_taps(), because a layout inside MDList/ScrollView
+            # never receives touch itself.
+            row = BoxLayout(
                 orientation='vertical', size_hint_y=None, height=dp(76),
                 padding=(dp(8), dp(6)), spacing=dp(2))
-            content.add_widget(_text_label(title, font, 16,
-                                           (0.1, 0.1, 0.1, 1)))
-            content.add_widget(_text_label('来自 %s' % from_addr, font, 12,
-                                           (0.45, 0.45, 0.45, 1)))
-            content.add_widget(_text_label(_preview(body), font, 13,
-                                           (0.25, 0.25, 0.25, 1)))
-            row.add_widget(content)
-            row.bind(on_release=_partial(
-                self._open_detail, from_addr, subject, body, received))
+            row.add_widget(_text_label(title, font, 16, (0.1, 0.1, 0.1, 1)))
+            row.add_widget(_text_label('来自 %s' % from_addr, font, 12,
+                                       (0.45, 0.45, 0.45, 1)))
+            row.add_widget(_text_label(_preview(body), font, 13,
+                                       (0.25, 0.25, 0.25, 1)))
+            row.touch_args = (from_addr, subject, body, received)
             ml.add_widget(row)
+        self._install_row_taps(ml)
+
+    def _install_row_taps(self, ml):
+        """Route taps on the list to the row that was hit.
+
+        Installed on the MDList once; coordinates are converted into each
+        row's local space and the topmost hit wins.
+        """
+        if getattr(ml, '_taps_installed', False):
+            return
+        ml._taps_installed = True
+
+        def _on_down(_widget, touch):
+            for child in ml.children:
+                if not hasattr(child, 'touch_args'):
+                    continue
+                if child.collide_point(touch.x, touch.y):
+                    if getattr(touch, 'grab_current', None) is None:
+                        from_addr, subject, body, received = child.touch_args
+                        print('INBOX row tapped from=%s' % from_addr,
+                              flush=True)
+                        _safe_call(self._open_detail, from_addr, subject,
+                                   body, received)
+                    return True
+            return False
+
+        ml.bind(on_touch_down=_on_down)
 
     def _open_detail(self, from_addr, subject, body, received):
         """Show the whole message (the list only ever showed a preview)."""
@@ -211,15 +230,15 @@ class Inbox(Screen):
         from kivymd.uix.dialog import MDDialog
 
         content = _detail_content(from_addr, subject, body, received)
-        # The dialog title and button are rendered by MDDialog/MDFlatButton
-        # with the theme font, which has no CJK glyphs here -- pass ours so
-        # '消息详情' and '关闭' are not tofu boxes.
+        # MDDialog / MDFlatButton have NO font_name property -- passing it
+        # raised "Properties ['font_name'] ... may not be existing property
+        # names" and the dialog never opened. Use ASCII-safe title/buttons
+        # here; the CJK content (subject/sender/body) lives inside the custom
+        # content widget, which uses native Labels with our CJK font.
         dialog = MDDialog(
-            title='消息详情', type='custom', content_cls=content,
-            font_name=_cjk_font(),
+            title='Message', type='custom', content_cls=content,
             buttons=[MDFlatButton(
-                text='关闭', font_name=_cjk_font(),
-                on_release=lambda *_: dialog.dismiss())])
+                text='Close', on_release=lambda *_: dialog.dismiss())])
         dialog.open()
         print('INBOX open detail from=%s len(body)=%d' % (
             from_addr, len(body or '')), flush=True)
