@@ -57,6 +57,71 @@ MAX_LABEL_LENGTH = 15
 TRUNCATE_STRING = '...'
 
 
+# Android ships a CJK font in a few possible places; KivyMD's theme font
+# (Roboto) has no Chinese glyphs, so every translated label rendered as a
+# tofu box until we swapped the theme font.
+_CJK_FONT_CANDIDATES = (
+    '/system/fonts/NotoSansCJK-Regular.ttc',
+    '/system/fonts/NotoSansSC-Regular.otf',
+    '/system/fonts/DroidSansFallback.ttf',
+    '/system/fonts/NotoSansCJKsc-Regular.otf',
+)
+_CJK_FONT_NAME = None
+
+
+def cjk_font_name():
+    """Register and return a CJK-capable font name (cached)."""
+    global _CJK_FONT_NAME
+    if _CJK_FONT_NAME:
+        return _CJK_FONT_NAME
+    from kivy.core.text import LabelBase
+    for path in _CJK_FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                LabelBase.register(name='CJK', fn_regular=path)
+                _CJK_FONT_NAME = 'CJK'
+                return _CJK_FONT_NAME
+            except Exception:  # noqa: BLE001
+                continue
+    _CJK_FONT_NAME = 'Roboto'
+    return _CJK_FONT_NAME
+
+
+def apply_cjk_theme_font(app):
+    """Point KivyMD's whole theme at the CJK font.
+
+    KivyMD widgets (NavigationItem, MDLabel, MDTextField, dialogs...) resolve
+    their font through ``theme_cls.font_styles``, entries of the form
+    ``[font_name, size, bold, letter_spacing]``. Rewriting element 0 of every
+    style makes all MD widgets Chinese-capable at once.
+
+    ``app`` is passed in because MDApp.get_running_app() is not reliably set
+    yet while build() runs.
+    """
+    name = cjk_font_name()
+    print('CJK font resolved: %r' % (name,), flush=True)
+    try:
+        styles = app.theme_cls.font_styles
+        changed = 0
+        for style in list(styles.keys()):
+            # Never touch the icon style: it is ["Icons", 24, ...] and every
+            # IconLeftWidget/MDIconButton renders a private-use codepoint from
+            # that font. Rewriting it turned all drawer icons into tofu boxes
+            # (MDLabel.update_font_style() assigns font_name unconditionally).
+            if style == 'Icon':
+                continue
+            value = styles[style]
+            if isinstance(value, (list, tuple)) and value:
+                styles[style] = [name] + list(value[1:])
+                changed += 1
+        print('CJK theme font applied to %d text styles (Icon kept as %r)' % (
+            changed, styles.get('Icon', ['?'])[0]), flush=True)
+        return True
+    except Exception as exc:  # noqa: BLE001 - never block startup
+        print('CJK theme font failed: %r' % (exc,), flush=True)
+        return False
+
+
 class Lang(BaseLanguage):
     """UI Language.
 
@@ -236,6 +301,9 @@ class NavigateApp(MDApp):
 
     def build(self):
         """Method builds the widget"""
+        # M6: swap KivyMD's theme font for a CJK one before any widget is
+        # built, otherwise every translated label renders as a tofu box.
+        apply_cjk_theme_font(self)
         for kv in self.data_screens:
             Builder.load_file(
                 os.path.join(
