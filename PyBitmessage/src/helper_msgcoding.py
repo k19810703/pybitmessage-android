@@ -72,12 +72,20 @@ class MsgEncode(object):
 
     def encodeSimple(self, message):
         """Handle simple encoding"""
-        self.data = 'Subject:%(subject)s\nBody:%(body)s' % message
+        # M4.8.7: the length must count UTF-8 BYTES, not characters. With a
+        # non-ASCII subject (e.g. Chinese) len(str) < len(utf-8), the msg
+        # length varint in the object was short, the receiver's parse then
+        # misaligned and ECDSA verification failed -- every Chinese-subject
+        # message was silently dropped. (ASCII subjects worked, which is why
+        # this only surfaced after the api.py repr-storage bug was fixed.)
+        self.data = (
+            'Subject:%(subject)s\nBody:%(body)s' % message).encode('utf-8')
         self.length = len(self.data)
 
     def encodeTrivial(self, message):
         """Handle trivial encoding"""
-        self.data = message['body']
+        self.data = message['body'].encode(
+            'utf-8') if isinstance(message['body'], str) else message['body']
         self.length = len(self.data)
 
 

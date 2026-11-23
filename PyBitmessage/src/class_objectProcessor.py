@@ -481,6 +481,8 @@ class objectProcessor(threading.Thread):
                     # in the encrypted data.
                     toRipe = key
                     initialDecryptionSuccessful = True
+                    print('PROCMSG DECRYPT OK ripe=%s' % hexlify(key)[:16],
+                          flush=True)
                     logger.info(
                         'EC decryption successful using key associated'
                         ' with ripe hash: %s.', hexlify(key))
@@ -540,6 +542,10 @@ class objectProcessor(threading.Thread):
         # for later use.
         endOfThePublicKeyPosition = readPosition
         if toRipe != decryptedData[readPosition:readPosition + 20]:
+            print('PROCMSG FORWARDING CHECK FAILED: mine=%s embedded=%s' % (
+                hexlify(toRipe)[:16],
+                hexlify(decryptedData[readPosition:readPosition + 20])[:16]),
+                flush=True)
             return logger.info(
                 'The original sender of this message did not send it to'
                 ' you. Someone is attempting a Surreptitious Forwarding'
@@ -574,9 +580,14 @@ class objectProcessor(threading.Thread):
             streamNumberAsClaimedByMsg
         ) + decryptedData[:positionOfBottomOfAckData]
 
+        print('PROCMSG verifying: signed=%dB sig=%dB pub=%s' % (
+            len(signedData), len(signature), hexlify(pubSigningKey)[:16]),
+            flush=True)
         if not highlevelcrypto.verify(
                 signedData, signature, hexlify(pubSigningKey)):
+            print('PROCMSG ECDSA verify FAILED', flush=True)
             return logger.debug('ECDSA verify failed')
+        print('PROCMSG ECDSA verify PASSED', flush=True)
         logger.debug('ECDSA verify passed')
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
