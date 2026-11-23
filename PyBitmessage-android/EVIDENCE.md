@@ -559,6 +559,45 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.39 ✅✅ 稳定基线包：零热补丁，全部功能设备验证通过（2026-11-23 09:42）
+
+**背景**：此前平板靠 3 个热补丁文件运行（inbox.py / msg_composer.py / mpybit.py），
+一旦装新包修复就会丢失。本次把它们全部固化进 APK。
+
+**包**：
+
+```
+/tmp/pybitmessage-baseline-2026-11-23.apk
+sha256 d3a0e650b38a86cfbfc6002c32b82f09947beb9c14a05fdaa67f7f00922a7225
+run    45094228488（commit b44b7b9）
+```
+
+**字节码校验**（解包 assets/private.tar 检查 pyc 里的函数名）：
+
+```
+inbox    : _cjk_font, _repair_legacy_rows, _install_row_taps, _open_detail, _text_label  ✅
+composer : send                                                                          ✅
+mpybit   : _composer_action                                                              ✅
+```
+
+**安装步骤**：备份 keys.dat/messages.dat/knownnodes.dat → `pm install -r -d`
+→ **删除全部热补丁 .py 及其 .pyc** → 确认 `find files/app -name "*.py"` 无输出。
+
+**设备验证（零热补丁）**：
+
+```
+INBOX loadMessagelist: 2 message(s)
+INBOX cjk font registered from /system/fonts/NotoSansCJK-Regular.ttc
+KEEPALIVE active: wakeLock=True batteryExempt=False
+SERVICE started pid=29712
+崩溃（JNI / Fatal / Unhandled）: 0 次
+INBOX row tapped from=BM-2cXj6btesow8nHkDz1zEYSicugi1qMf7jf
+INBOX open detail from=BM-2cXj6btesow8nHkDz1zEYSicugi1qMf7jf len(body)=7
+```
+
+截图确认：收件箱中文正常（`来自 BM-2cXj6bteso…`、`公网测试 1`），点击弹出详情窗口
+（主题/来自/时间/正文齐全）。
+
 ### 1.38 ✅✅ 点击打开详情成功（2026-11-23 09:05）
 
 接 1.37 的未完成项。**又踩了三个坑，都是设备日志/截图定位的**：
