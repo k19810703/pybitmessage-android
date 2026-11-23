@@ -591,6 +591,49 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.48 ✅✅ M6 第二阶段：Sent/Draft/Trash/AllMails 四个空壳页面修复（2026-11-23 14:41）
+
+**问题**：这四个抽屉页面和最初的 Inbox 一样是空壳——`loadSent()` / `load_draft()` /
+`load_message_list()` 只设置 `self.account` 就结束，从不查询数据库；Trash 连
+loader 都没有。
+
+**实现**（commit `bb0a68d` + `aae1942` + `053b5ea`）：新增
+`baseclass/mail_list.py` 作为共享实现：
+
+- `load_folder(sent|draft|trash|inbox|all)`：Bitmessage 用 `folder` 列在同两张表里区分
+  文件夹，因此一个查询辅助覆盖四个页面
+- `render()`：原生 Label + CJK 字体填充 `ids.ml`，并装 MDList 层点击处理
+- `show_detail()`：复用 Inbox 验证过的 MDDialog 模式
+- `_STATUS_ZH`：发送状态中文化（**顺带完成 M3.9.4**）：
+  `msgsent`→已发送、`ackreceived`→对方已确认、`doingmsgpow`→计算消息 PoW 等
+
+四个页面均加 `on_pre_enter` 重载；表缺失时返回空列表 + 日志而不抛异常。
+
+**AllMails 的第二个坑**（只有修完第一个才发现）：`all_mails` 是空 ListProperty，
+导致 `_update_mail_count()` 总走空分支，往 `ids.ml` 里塞「暂无消息」标签，
+**盖住了刚渲染的 8 行**。改为把 `render()` 返回值存进 `all_mails`，
+`_update_mail_count()` 只更新徽章，空状态交给 `render()`。
+
+**设备验证**（干净包，零热补丁）：
+
+```
+LIST sent: 6 message(s)          → 「已发送」列出全部 6 条，状态全中文
+LIST all: 8 message(s)            → 「全部邮件」列出 8 条（收件+发件混排）
+LIST render all by AllMails done: 8 widget(s)
+徽章显示 8
+```
+
+截图确认：「已发送」6 条（含 `[对方已确认]`、`[已发送]`）；
+「全部邮件」8 条（收件与发件按时间倒序混排，中文状态）。
+
+**顺带确认的业务事实**：13:33 发给 sjy 的消息已是 **[对方已确认]**，
+即 sjy 已收到并返回回执。
+
+**包**：run 45123990348 → `/tmp/pybitmessage-m6c.apk`（个钥重签，
+sha256 `52f4273f6b8974fe762cf526dd835e2555fb5d1da8f678e66d2eb0ea8d034fd6`）。
+
+**遗留**（记录，非本轮）：搜索框仍是硬编码英文 "Search"。
+
 ### 1.47 ✅✅ M6 第一阶段完成：抽屉菜单全中文 + 图标完整（2026-11-23 14:07）
 
 **首轮现象**（1.45 的包）：翻译生效但**全部渲染成豆腐块 □**——翻译对了，字体没跟上。
