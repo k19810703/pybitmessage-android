@@ -1505,7 +1505,8 @@ class BMRPCDispatcher(object):
         objectType = 1  # .. todo::: support v4 pubkeys
         TTL = 28 * 24 * 60 * 60
         state.Inventory[inventoryHash] = (
-            objectType, pubkeyStreamNumber, payload, int(time.time()) + TTL, ''
+            objectType, pubkeyStreamNumber, payload, int(time.time()) + TTL,
+            b''
         )
         logger.info(
             'broadcasting inv within API command disseminatePubkey with'

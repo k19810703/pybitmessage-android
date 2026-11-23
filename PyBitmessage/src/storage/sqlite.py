@@ -9,6 +9,20 @@ from helper_sql import SqlBulkExecute, sqlExecute, sqlQuery
 from .storage import InventoryItem, InventoryStorage
 
 
+def _as_bytes(value):
+    """Coerce an inventory field to bytes for sqlite3.Binary().
+
+    py3's bytes(str) needs an encoding, so a plain bytes(value) would just
+    move the crash; encode str via latin-1 (py2 str was raw bytes) and pass
+    everything else through bytes().
+    """
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value.encode('latin-1', 'replace')
+    return bytes(value)
+
+
 class SqliteInventory(InventoryStorage):
     """Inventory using SQLite"""
     def __init__(self):
@@ -112,14 +126,21 @@ class SqliteInventory(InventoryStorage):
             # always use the inventoryLock OUTSIDE of the sqlLock.
             with SqlBulkExecute() as sql:
                 for objectHash, value in self._inventory.items():
+                    # Defensive bytes coercion (M4.8.1): py2-era writers
+                    # stored the tag as '' (str) and used buffer(), which
+                    # does not exist on py3; sqlite3.Binary(str) then raised
+                    # "memoryview: a bytes-like object is required" and
+                    # killed the singleCleaner thread, so knownnodes were
+                    # never flushed to disk again. Coerce here so no future
+                    # str-typed writer can take the thread down.
                     sql.execute(
                         'INSERT INTO inventory VALUES (?, ?, ?, ?, ?, ?)',
-                        sqlite3.Binary(objectHash),
+                        _as_bytes(objectHash),
                         value.type,
                         value.stream,
-                        sqlite3.Binary(value.payload),
+                        _as_bytes(value.payload),
                         value.expires,
-                        sqlite3.Binary(value.tag))
+                        _as_bytes(value.tag))
                 self._inventory.clear()
 
     def clean(self):

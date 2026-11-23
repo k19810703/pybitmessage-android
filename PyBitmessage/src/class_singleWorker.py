@@ -291,7 +291,7 @@ class singleWorker(StoppableThread):
         inventoryHash = highlevelcrypto.calculateInventoryHash(payload)
         objectType = 1
         state.Inventory[inventoryHash] = (
-            objectType, streamNumber, payload, embeddedTime, '')
+            objectType, streamNumber, payload, embeddedTime, b'')
 
         self.logger.info(
             'broadcasting inv with hash: %s', hexlify(inventoryHash))
@@ -379,7 +379,7 @@ class singleWorker(StoppableThread):
         inventoryHash = highlevelcrypto.calculateInventoryHash(payload)
         objectType = 1
         state.Inventory[inventoryHash] = (
-            objectType, streamNumber, payload, embeddedTime, '')
+            objectType, streamNumber, payload, embeddedTime, b'')
 
         self.logger.info(
             'broadcasting inv with hash: %s', hexlify(inventoryHash))
@@ -518,9 +518,10 @@ class singleWorker(StoppableThread):
             payload, TTL, log_prefix='(For onionpeer object)')
 
         inventoryHash = highlevelcrypto.calculateInventoryHash(payload)
+        # py2 used buffer() as a zero-copy optimisation; py3 has no buffer
+        # builtin, so this line would NameError on every v4-address msg.
         state.Inventory[inventoryHash] = (
-            objectType, streamNumber, buffer(payload),  # noqa: F821
-            embeddedTime, buffer(tag)  # noqa: F821
+            objectType, streamNumber, payload, embeddedTime, tag
         )
         self.logger.info(
             'sending inv (within sendOnionPeerObj function) for object: %s',
@@ -1277,7 +1278,7 @@ class singleWorker(StoppableThread):
             inventoryHash = highlevelcrypto.calculateInventoryHash(encryptedPayload)
             objectType = 2
             state.Inventory[inventoryHash] = (
-                objectType, toStreamNumber, encryptedPayload, embeddedTime, '')
+                objectType, toStreamNumber, encryptedPayload, embeddedTime, b'')
             if config.has_section(toaddress) or \
                not protocol.checkBitfield(behaviorBitfield, protocol.BITFIELD_DOESACK):
                 queues.UISignalQueue.put((
@@ -1433,7 +1434,7 @@ class singleWorker(StoppableThread):
         inventoryHash = highlevelcrypto.calculateInventoryHash(payload)
         objectType = 1
         state.Inventory[inventoryHash] = (
-            objectType, streamNumber, payload, embeddedTime, '')
+            objectType, streamNumber, payload, embeddedTime, b'')
         self.logger.info('sending inv (for the getpubkey message)')
         invQueue.put((streamNumber, inventoryHash))
 
