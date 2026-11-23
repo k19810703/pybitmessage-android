@@ -309,7 +309,9 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | **M4.8.4** | `networkConnections` 计数失真 | `clientStatus` 报 1，`lsof` 实际 5 条 ESTABLISHED | 核对计数来源（`connectionpool.outboundConnections` vs 实际 channel） | **A**：`clientStatus.networkConnections` 与 `netstat` 的 ESTABLISHED 数差 ≤ 1 | M3.8.4 | 低（不影响功能，影响诊断） |
 | **M4.8.5** | `doingmsgpow` 偶发卡 5 分钟 | 平板第 2 条消息 `doingmsgpow` 持续 5+ 分钟未推进（第 1 条正常，C PoW 单对象 ~4s） | 查 `class_singleWorker` 的队列/`sleeptill` 逻辑 | **T**：连续发 5 条，每条 `doingmsgpow` ≤ 30 秒 | M3.4 | 中 |
 
-**状态**：全部 ⬜ 未开始。M4.8.1 / M4.8.3 建议随 M4.4、M4.6 一起做；
+| **M4.8.6** | 桥接/握手 TLS 竞态 | Mac→平板经 adb 桥 100% 复现：明文 verack 卡在 `tls_init` 包装之后发不出去，连接永不建立（EVIDENCE §1.44）。疑为上游 bug，公网连接不受影响 | 桥接能建立并传输对象；或证明桥接方案废弃 | M4.8 系列 | 低（只影响 USB 桥测试路径） |
+
+**状态**：M4.8.1 ◐ 代码+设备验证（0 崩溃、flush 正常，EVIDENCE §1.43）；M4.8.2 ◐ 代码+单元验证，送达实测待平板回到可用网络；M4.8.3 建议随 M4.6 一起做；
 M4.8.2 建议在 M4.3（保活）验证同期处理，因为它与"消息能否到达"直接相关。
 
 > **Gate G4（阶段出口）**：C1–C4

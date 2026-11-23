@@ -559,6 +559,57 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.44 🔍 新发现：桥接 TLS 竞态——明文 verack 被 TLS 包装卡死（2026-11-23 12:06）
+
+**现象**（Mac 经 `adb forward tcp:18444 tcp:8444` 连平板，100% 复现，平板重启无效）：
+
+```
+Mac 侧（每 ~9 秒循环一轮，永不 established）：
+  recv version → version parsed → sent verack (outbound=True)
+  → verack received (verackSent=False)      ← 永远到不了 "verack -> established"
+
+平板侧：
+  recv version → sent verack → sent version back to peer
+  → （再也收不到 Mac 的 verack）             ← 卡死等待
+
+lsof：两条 ESTABLISHED TCP；"TCP established" 打印 0 次；两侧日志均无 SSL 错误
+（Mac 节点日志级别 WARNING，SSL/closing 行被吞——BITMESSAGE_LOG_DEBUG 未生效，
+debug.py 的 handler 级别问题，另记）。
+```
+
+**机制分析**（高置信度，未最终证实）：入站方的发送顺序是 **[verack][version]**
+（`bm_command_version` 先 `append_write_buf(verack)` 再 append version）。Mac 处理完
+version 后，自己的 verack 还在 `write_buf` 里没冲刷，状态机就进入 `tls_init`
+把 socket 包成 SSL——明文 verack 从此发不出去（非阻塞 SSL socket 上 send 会
+WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功而桥接不能，
+怀疑与 adb 中继的时序有关（公网时 write_buf 在 tls_init 前被事件循环冲掉）。
+
+**11-19 桥接曾成功**——当时先由平板经局域网发现主动连了 Mac（方向相反），
+后来 Mac→平板的桥连接也建立过；今天平板在访客网无法做局域网发现。
+
+**处置**：
+- 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
+- M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
+
+### 1.43 ◐ M4.5.1+M4.8.1 设备验收通过；M4.8.2 送达受阻；发现桥接 TLS 竞态（2026-11-23 12:06）
+
+**装机**：`/tmp/pybitmessage-m481.apk`（sha256 `777cd5cc…`，run 45104172546，
+含 M4.5.1+M4.8.2+M4.8.1）。装机前备份三件套；装机后确认零热补丁残留。
+
+| 任务 | 设备验收结果 |
+|---|---|
+| **M4.5.1** | ✅ `dumpsys package` 的 `flags` **无 ALLOW_BACKUP**（修复前该 flag 存在） |
+| **M4.8.1** | ✅ 发消息（11:33，UI 操作，`msgsent`）触发 inventory 写入后运行 30+ 分钟：`THREAD-CRASH singleCleaner` **0 次**；`inventory` 表 10009 个对象含刚 flush 的 type=2 消息对象（正是以前崩溃的路径）。knownnodes mtime 未变属正常（无过期节点可清理时不写盘） |
+| **M4.8.2** | ◐ 代码+单元验证通过；**送达实测被环境阻塞**（见下） |
+
+**M4.8.2 送达实测的两个阻塞**：
+
+1. **平板在 IBMGuest 访客 Wi-Fi**（172.24.5.126）：种子对该出口 IP 持续回
+   `Too many connections from your IP`，App 重启后从未建立任何 peer 连接
+   （今天全程 0 次 `TCP established`）。消息对象（11:33 生成）仍在本地库存，
+   等平板回到可用网络后会在连接建立时经 big-inv 通告出去。
+2. **USB 桥接被 TLS 竞态卡死**（新发现，见 1.44）。
+
 ### 1.42 ✅ M4.8.1 完成：singleCleaner 不再死于 str 类型 tag（2026-11-23 11:20）
 
 **崩溃链**（2026-11-19 实测，平板和 Mac 节点都发生过）：
