@@ -43,11 +43,19 @@ class Draft(Screen):
         logger.debug(f"UI initialized with dt: {dt}")  # noqa: E999
 
     def load_draft(self, where="", what=""):
-        """Load the list of draft messages"""
-        self.set_draft_count('0')
-        self.ids.ml.add_widget(empty_screen_label(self.label_str))
+        """Load the Draft folder into the list."""
+        self.account = self.kivy_state.selected_address
+        from pybitmessage.bitmessagekivy.baseclass.mail_list import (
+            render, show_detail)
+        self.queryreturn = render(self, 'draft', on_tap=show_detail)
 
-    @staticmethod
+    def on_pre_enter(self, *args):
+        """Reload whenever the screen is opened."""
+        try:
+            self.load_draft()
+        except Exception as exc:  # noqa: BLE001
+            print('DRAFT refresh failed: %r' % (exc,), flush=True)
+
     def set_draft_count(count):
         """Set the count of draft messages in the UI"""
         draft_count_obj = App.get_running_app().root.ids.content_drawer.ids.draft_cnt

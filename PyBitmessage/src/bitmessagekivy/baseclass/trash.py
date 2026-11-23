@@ -24,6 +24,19 @@ class Trash(Screen):
     table_name = StringProperty()
     no_msg_found_str = "Yet no trashed message for this account!"
 
+    def on_pre_enter(self, *args):
+        """Load the Trash folder whenever the screen is opened.
+
+        Upstream never loaded anything here at all -- the screen had no query
+        and no render path.
+        """
+        from pybitmessage.bitmessagekivy.baseclass.mail_list import (
+            render, show_detail)
+        try:
+            self.trash_messages = render(self, 'trash', on_tap=show_detail)
+        except Exception as exc:  # noqa: BLE001
+            print('TRASH refresh failed: %r' % (exc,), flush=True)
+
     def __init__(self, *args, **kwargs):
         """Trash method, delete sent message and add in Trash"""
         super(Trash, self).__init__(*args, **kwargs)

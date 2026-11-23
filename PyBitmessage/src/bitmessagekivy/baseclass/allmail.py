@@ -48,8 +48,11 @@ class AllMails(Screen):
         logger.debug("UI initialized after %s seconds.", dt)
 
     def load_message_list(self):
-        """Load the Inbox, Sent, and Draft message lists."""
+        """Load every folder (inbox + sent + draft + trash) into the list."""
         self.account = self.kivy_state.selected_address
+        from pybitmessage.bitmessagekivy.baseclass.mail_list import (
+            render, show_detail)
+        self.queryreturn = render(self, 'all', on_tap=show_detail)
         self.ids.tag_label.text = 'All Mails' if self.all_mails else ''
         self._update_mail_count()
 

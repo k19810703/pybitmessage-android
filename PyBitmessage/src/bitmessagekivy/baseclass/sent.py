@@ -42,6 +42,18 @@ class Sent(Screen):
                 self.kivy_state.selected_address = self.kivy_running_app.identity_list[0]
 
     def loadSent(self, where="", what=""):
-        """Load Sent list for Sent messages"""
+        """Load the Sent folder into the list."""
         self.set_defaultAddress()
         self.account = self.kivy_state.selected_address
+        # Upstream stopped here and never queried anything, so this screen was
+        # always empty. mail_list renders sent/draft/trash/all uniformly.
+        from pybitmessage.bitmessagekivy.baseclass.mail_list import (
+            render, show_detail)
+        self.queryreturn = render(self, 'sent', on_tap=show_detail)
+
+    def on_pre_enter(self, *args):
+        """Reload whenever the screen is opened."""
+        try:
+            self.loadSent()
+        except Exception as exc:  # noqa: BLE001
+            print('SENT refresh failed: %r' % (exc,), flush=True)
