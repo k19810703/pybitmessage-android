@@ -166,6 +166,7 @@ class Inbox(Screen):
             return
         from kivy.metrics import dp
         from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
         from kivy.uix.label import Label
 
         # Native Label, not MDLabel: MDLabel applies the theme font and
@@ -181,16 +182,27 @@ class Inbox(Screen):
             return
         for from_addr, subject, body, received in messages:
             title = subject or (body[:32] + ('…' if len(body) > 32 else ''))
-            row = BoxLayout(
-                orientation='vertical', size_hint_y=None, height=dp(72),
+            # A native Button, not a BoxLayout: inside an MDList/ScrollView a
+            # plain layout never receives the touch (a ButtonBehaviour mixin
+            # did not help either). Button has its own touch dispatch, so the
+            # tap reliably reaches on_release. The visual is flattened by
+            # clearing background_normal and making the button white.
+            row = Button(
+                size_hint_y=None, height=dp(76),
+                background_normal='', background_down='',
+                background_color=(1, 1, 1, 1))
+            content = BoxLayout(
+                orientation='vertical', size_hint_y=None, height=dp(76),
                 padding=(dp(8), dp(6)), spacing=dp(2))
-            row.add_widget(_text_label(title, font, 16, (0.1, 0.1, 0.1, 1)))
-            row.add_widget(_text_label('来自 %s' % from_addr, font, 12,
-                                       (0.45, 0.45, 0.45, 1)))
-            row.add_widget(_text_label(_preview(body), font, 13,
-                                       (0.25, 0.25, 0.25, 1)))
-            _bind_tap(row, self._open_detail, from_addr, subject, body,
-                      received)
+            content.add_widget(_text_label(title, font, 16,
+                                           (0.1, 0.1, 0.1, 1)))
+            content.add_widget(_text_label('来自 %s' % from_addr, font, 12,
+                                           (0.45, 0.45, 0.45, 1)))
+            content.add_widget(_text_label(_preview(body), font, 13,
+                                           (0.25, 0.25, 0.25, 1)))
+            row.add_widget(content)
+            row.bind(on_release=_partial(
+                self._open_detail, from_addr, subject, body, received))
             ml.add_widget(row)
 
     def _open_detail(self, from_addr, subject, body, received):
@@ -252,21 +264,9 @@ def _bidi_safe_text(value):
         return value
 
 
-def _bind_tap(widget, callback, *args):
-    """Call ``callback(*args)`` when ``widget`` is tapped.
-
-    BoxLayout does not dispatch touch by itself (it has no ButtonBehavior),
-    so the earlier on_touch_down/up binding never fired on the device. Make
-    the row a ButtonBehaviour mixin instead: that is what actually receives
-    press/release, and it still works for a plain layout.
-    """
-    from kivy.uix.behaviors import ButtonBehavior
-
-    class _TappableRow(ButtonBehavior, type(widget)):
-        pass
-
-    widget.__class__ = _TappableRow
-    widget.bind(on_release=lambda *_a: _safe_call(callback, *args))
+def _partial(callback, *args):
+    """Bind ``callback(*args)`` ignoring the widget argument on_release adds."""
+    return lambda *_ignored: _safe_call(callback, *args)
 
 
 def _safe_call(callback, *args):
