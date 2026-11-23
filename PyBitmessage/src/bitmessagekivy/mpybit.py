@@ -58,7 +58,116 @@ TRUNCATE_STRING = '...'
 
 
 class Lang(BaseLanguage):
-    """UI Language"""
+    """UI Language.
+
+    M6: Chinese translation for the whole navigation drawer and the
+    dialogs. Upstream never shipped a Kivy translation mechanism (the
+    BaseLanguage._() stub returns the text unchanged), so this is a plain
+    dictionary lookup -- every string the UI actually renders through
+    app.tr._() is listed here. Unmatched strings fall back to English.
+    """
+
+    ZH = {
+        # --- navigation drawer (main.kv) ---
+        'Accounts': '账户',
+        'Inbox': '收件箱',
+        'Sent': '已发送',
+        'Draft': '草稿',
+        'Trash': '回收站',
+        'All Mails': '全部邮件',
+        'Chat': '聊天',
+        'All labels': '全部标签',
+        'Address Book': '通讯录',
+        'Settings': '设置',
+        'Payment plan': '付费方案',
+        'New address': '新建地址',
+        'Network status': '网络状态',
+        'My addresses': '我的地址',
+        # --- dialogs and forms ---
+        'My Addresses': '我的地址',
+        'Apply': '应用',
+        'Cancel': '取消',
+        'OK': '确定',
+        'Yes': '是',
+        'No': '否',
+        'Send': '发送',
+        'Send message from': '发件人',
+        'Show QR code': '显示二维码',
+        'Type or Scan QR code for recipients address': '输入或扫描收件人地址',
+        'Enter a label to:generate address for:': '输入标签以生成地址：',
+        'Enter a label to generate address for:': '输入标签以生成地址：',
+        'Select method to make an address:': '选择生成地址的方式：',
+        'Passphrase (deterministic) Generator': '口令（确定性）生成器',
+        'Pseudorandom Generator': '伪随机生成器',
+        'Proceed Next': '下一步',
+        'From :': '发件人：',
+        'First message': '第一条消息',
+        'No Chat': '暂无聊天',
+        'Chats': '聊天',
+        'Contacts': '联系人',
+        'Reply below Quote': '在引用下方回复',
+        'Label': '标签',
+        'Address': '地址',
+        'Authentication': '身份验证',
+        'Username:': '用户名：',
+        'Password:': '密码：',
+        'Pass:': '密码：',
+        'Type:': '类型：',
+        'Port:': '端口：',
+        'hostname:': '主机名：',
+        'Server hostname:': '服务器主机名：',
+        'Connect to:': '连接到：',
+        'Listening port': '监听端口',
+        'Listen for connections on port:': '监听连接的端口：',
+        'Listen for incoming connections when using proxy': '使用代理时监听入站连接',
+        'Proxy server / Tor': '代理服务器 / Tor',
+        'Only connect to onion services(*.onion)': '仅连接洋葱服务（*.onion）',
+        'User Interface': '用户界面',
+        'Interface Language': '界面语言',
+        'Close to tray': '关闭到托盘',
+        'Minimize to tray': '最小化到托盘',
+        'Tray': '托盘',
+        'Start-on-login not yet supported on your OS': '您的操作系统暂不支持开机自启',
+        'Show notification when message received': '收到消息时显示通知',
+        'Hide connection notifications': '隐藏连接通知',
+        'Use identicons': '使用抽象头像',
+        'Hardware GPU acceleration (OpenCL):': '硬件 GPU 加速（OpenCL）：',
+        'Maximum acceptable total difficulty:': '最大接受总难度：',
+        'Total difficulty:': '总难度：',
+        'Small message difficulty:': '小消息难度：',
+        'Maximum download rate (kB/s):[0:unlimited]': '最大下载速度 (kB/s)：[0：不限]',
+        'Maximum upload rate (kB/s):[0:unlimited]': '最大上传速度 (kB/s)：[0：不限]',
+        'Maximum outbound connections:[0:none]': '最大出站连接数：[0：无]',
+        'Bandwidth limit': '带宽限制',
+        'Give up after': '放弃于',
+        'days and': '天',
+        'objects': '个对象',
+        'publickeys': '公钥',
+        'Extra-Messages': '额外消息',
+        'Total connections': '总连接数',
+        'Total Connections': '总连接数',
+        'Processes': '进程',
+        'Payment': '支付',
+        'Available Credits': '可用额度',
+        '+Add more credits': '+充值',
+        'Brodcast': '广播',
+        'person-to-person': '点对点',
+        'Namecoind': 'Namecoind',
+        'NMControl': 'NMControl',
+        'UPnP': 'UPnP',
+        'Willingly include unencrypted destination address when sending to a '
+        'mobile device': '向移动设备发送时包含未加密的目标地址',
+        'In portable Mode, messages and config files are stored in the same '
+        'directory as the program rather then the normal application-data '
+        'folder. This makes it convenient to run Bitmessage from a USB '
+        'thumb drive.': '便携模式下，消息和配置文件与程序存放在同一目录，而非系统'
+        '的应用数据目录。这便于从 U 盘运行 Bitmessage。',
+        'Leave these input fields blank for the default behavior.': '留空则使用默认行为。',
+    }
+
+    def _(self, text):
+        """Translate *text* into Chinese; fall back to the original."""
+        return self.ZH.get(text, text)
 
 
 class NavigationItem(BaseNavigationItem):
@@ -113,7 +222,7 @@ class NavigateApp(MDApp):
     image_path = load_image_path()
     app_platform = platform
     encrypted_messages_per_month = _messages_last_month()
-    tr = Lang("en")  # for changing in franch replace en with fr
+    tr = Lang("zh")  # M6: Chinese UI (drawer + dialogs)
 
     def __init__(self):
         super(NavigateApp, self).__init__()
