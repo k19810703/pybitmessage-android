@@ -591,6 +591,51 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.46 ✅✅ M6 包装机 + 热点公网发送实测（2026-11-23 13:36）
+
+**装机**：`/tmp/pybitmessage-m6.apk`（run 45112151883，含全部修复 + 中文菜单）。
+装机前备份三件套；装后零热补丁残留。
+
+**启动验证**：
+
+```
+INBOX loadMessagelist: 2 message(s)
+INBOX cjk font registered from /system/fonts/NotoSansCJK-Regular.ttc
+KEEPALIVE active: wakeLock=True
+SERVICE started pid=28218
+TCP established: bootstrap8444.bitmessage.org:8444 outbound=True   ← 热点秒连公网
+```
+
+（中文菜单的目视确认由用户执行——当前会话模型不支持读图。）
+
+**热点网络下的公网状态**（对比 IBMGuest 全天 0 连接）：
+
+```
+8444 ESTABLISHED 连接数: 5
+TCP established: bootstrap8444 / 170.75.175.82 ...
+```
+
+**UI 发送实测**（用户指定场景：发给 test form sjy 的地址）：
+
+```
+收件人: BM-2cXj6btesow8nHkDz1zEYSicugi1qMf7jf
+内容:   Hello jy from Xiaomi Pad hotspot 1133
+时间:   13:33:58  状态: msgsent（PoW 完成、已通告）
+```
+
+（注：adb input text 的 %s 转义吞了一个字符，实际文本为 "Hello jy…"，不影响功能。）
+
+**库存中待送达的消息**（big-inv 已随连接通告给 5 个 peer）：
+
+| 发送时间 | 消息 | 状态 |
+|---|---|---|
+| 13:33 | Hello jy from Xiaomi Pad hotspot 1133 | msgsent（刚发） |
+| 09:24 | Hi sjy from XiaoMi Pad | msgsent（早上 IBMGuest 卡住，现已通告） |
+| 11-19 20:49 | 来自小米平板5… | msgsent（TTL 至今晚 20:46） |
+
+sjy 是否收到取决于其节点何时上线；消息有效期 4 天（11-19 的两条到今晚）。
+回执（ackreceived）出现即为送达确认。
+
 ### 1.45 ✅ M6 第一阶段：抽屉菜单 + 全部 tr._() 字符串中文化（2026-11-23 12:43）
 
 **问题**：主界面是中文，但抽屉菜单读作 Inbox / Sent / Draft / Trash / All Mails /
