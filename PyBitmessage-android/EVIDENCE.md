@@ -591,6 +591,40 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.47 ✅✅ M6 第一阶段完成：抽屉菜单全中文 + 图标完整（2026-11-23 14:07）
+
+**首轮现象**（1.45 的包）：翻译生效但**全部渲染成豆腐块 □**——翻译对了，字体没跟上。
+
+**三层排查，每层都是设备日志/截图驱动的**：
+
+| # | 现象 | 根因 | 修复 |
+|---|---|---|---|
+| 1 | 菜单项是 □ | KivyMD 组件从 `theme_cls.font_styles` 取字体（Roboto，无中文字形），不是 kv 里的 font_name | 新增 `apply_cjk_theme_font()`，注册系统 CJK 字体并重写 13 个文字样式的字体名 |
+| 2 | 加了函数但没日志 | `MDApp.get_running_app()` 在 `build()` 内还没设好，返回 None | 改为把 `self` 传进去 |
+| 3 | 热补丁不生效 | **mpybit 走顶层 `bitmessagekivy/`**（main.py 是 `from bitmessagekivy.mpybit import ...`），不是带 `pybitmessage/` 前缀那份。两个模块**导入路径不同**：kv 里的 Import 用 `pybitmessage.` 前缀，main.py 不用 | 两份都打 |
+| 4 | 中文出来了但**图标全变 ⊠** | `MDLabel.update_font_style()` 无条件套用主题字体，把 `"Icon": ["Icons", 24, ...]` 也改了——所有 IconLeftWidget/MDIconButton 的图标字形丢失 | **跳过 `Icon` 样式**：13 个文字样式改了，Icon 保留 `Icons` |
+
+**最终设备验证**（正式包，零热补丁）：
+
+```
+CJK theme font applied to 13 text styles (Icon kept as 'Icons')
+INBOX loadMessagelist: 2 message(s)
+SERVICE started pid=28469
+```
+
+截图确认：账户 / 收件箱 / 已发送 / 草稿 / 回收站 / 全部邮件 / 聊天，
+图标（信封/纸飞机/铅笔/垃圾桶/聊天）全部正常。
+
+**包**：run 45120317532 → `/tmp/pybitmessage-m6b.apk`（个钥重签，
+sha256 `3031c8adb1e6ac1e593f695f35c7b42f2ac215ae0aaf82c4102b0da8adc1c2c8`，
+含全部历史修复 + 中文菜单）。
+
+**同时发现的未完成项**（记录，非本轮范围）：
+
+1. **「已发送」页面为空**——与最初 Inbox 同样的上游缺陷：该页从未实现数据查询。
+   顺带说明：本轮 Inbox（抽屉里的）已修好，但 Sent/Draft/Trash/AllMails 仍是空壳。
+2. **搜索框仍显示 "Search"**——硬编码在 kv 里，不走 `tr._()`，不在本轮词典范围。
+
 ### 1.46 ✅✅ M6 包装机 + 热点公网发送实测（2026-11-23 13:36）
 
 **装机**：`/tmp/pybitmessage-m6.apk`（run 45112151883，含全部修复 + 中文菜单）。
