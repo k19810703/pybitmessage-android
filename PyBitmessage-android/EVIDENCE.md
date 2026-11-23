@@ -559,6 +559,44 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.42 ✅ M4.8.1 完成：singleCleaner 不再死于 str 类型 tag（2026-11-23 11:20）
+
+**崩溃链**（2026-11-19 实测，平板和 Mac 节点都发生过）：
+
+```
+THREAD-CRASH singleCleaner: TypeError("memoryview: a bytes-like object is
+required, not 'str'")  at storage/sqlite.py flush() → sqlite3.Binary(value.tag)
+→ singleCleaner 线程死亡 → knownnodes 永不落盘 → 每次重启重新抽签连节点
+```
+
+**根因**（审计全部 Inventory 写入点发现，全是 py2 遗留）：
+
+| 位置 | 问题 | 数量 |
+|---|---|---|
+| `class_singleWorker.py`（pubkey×2 / broadcast / onboarding pubkey） | tag 写成 `''`（str，py2 里 `''`==`b''`） | 4 处 |
+| `class_singleWorker.py:521`（v4 地址 msg） | 用了 **py2 的 `buffer()`**，py3 无此内建会 NameError | 1 处 |
+| `api.py` disseminatePubkey | tag 写成 `''` | 1 处 |
+
+**修复**（commit `b9c9996`）：
+
+1. 全部 6 处改为 `b''` / 原生对象（去掉 `buffer()`）
+2. `flush()` 加 `_as_bytes()` 防御（str→latin-1 bytes，bytearray/memoryview→bytes），
+   今后任何 str 类型的写入都不会再杀死线程
+
+**单元验证**：`''` / `'abc'` / `b'\x01'*32` / `bytearray(b'xyz')` 全部通过
+`_as_bytes` → `sqlite3.Binary` 绑定；完整 flush 路径模拟通过。
+
+（注：第一版防御用 `bytes(value)`，本地测试当场发现 py3 的 `bytes(str)`
+需要 encoding 参数——测试先行避免了又一次设备翻车。）
+
+**包**：run 45104172546 → `/tmp/pybitmessage-m481.apk`（个钥重签，
+sha256 `777cd5ccd1c1ddcc2ab16771ff89f271b2924a4f23d13bf3b26ba4631429e7d1`）
+**此包包含 M4.5.1 + M4.8.2 + M4.8.1 全部修复**，装机直接验它即可。
+字节码验证：`_as_bytes` 在 sqlite.pyc、无 str-tag 残留在 singleWorker.pyc。
+
+**待设备验收**（MILESTONES 的 L+F 标准）：运行 1 小时 logcat 无
+`THREAD-CRASH singleCleaner`；`knownnodes.dat` mtime 随运行更新。
+
 ### 1.41 ✅ M4.8.2 完成：skip 窗口不再吞掉已有对象的 getdata（2026-11-23 11:02）
 
 **问题**（2026-11-19 公网实测发现，当晚 3 条消息卡死）：

@@ -303,7 +303,7 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 | ID | 缺陷 | 实测现象 | 修复方向 | 验收 | 归属 | 优先级 |
 |---|---|---|---|---|---|---|
-| **M4.8.1** | `singleCleaner` 崩溃（py3 bytes/str） | `THREAD-CRASH singleCleaner: TypeError("memoryview: a bytes-like object is required, not 'str'")`；`class_singleCleaner.py:71 state.Inventory.flush()` → `storage/sqlite.py:122 sqlite3.Binary(value.tag)` | `value.tag` 是 str，入库前 `.encode()` | **L**：运行 1 小时 `logcat` 无 `THREAD-CRASH singleCleaner`；**F**：`knownnodes.dat` 的 mtime 随运行更新 | M4.4（持久化） | **高**（knownnodes 永不落盘的根因） |
+| **M4.8.1** ◐ | `singleCleaner` 崩溃（py3 bytes/str） | 已修：6 处 str tag/buffer() 写入点 + flush() `_as_bytes()` 防御（commit `b9c9996`，单元验证通过，EVIDENCE §1.42） | **L**：1 小时无 THREAD-CRASH；**F**：knownnodes.dat mtime 更新 | M4.4 | 代码✅ 待装机实测 |
 | **M4.8.2** ◐ | `skipUntil` 反交集防御吞 getdata | 已修：窗口内只排队 `state.Inventory` 里实际持有的对象，未持有的照旧丢弃（commit `8664414`，单元验证通过，EVIDENCE §1.41） | **T**：新地址间送达时间 P95 ≤ 5 分钟 | M3.8.4 + M4.3 | 代码✅ 待装机实测 |
 | **M4.8.3** | SIGTERM 优雅关闭挂死 | 节点收到 SIGTERM 后 API 已死但进程与 `singleton.lock` 仍在，新实例报 "Another instance is already running" | 关闭流程加超时强制退出；启动时检测陈旧锁 | **F**：`kill` 后 10 秒内进程消失且锁文件被清理；新实例可正常启动 | M4.6（崩溃自恢复） | 中 |
 | **M4.8.4** | `networkConnections` 计数失真 | `clientStatus` 报 1，`lsof` 实际 5 条 ESTABLISHED | 核对计数来源（`connectionpool.outboundConnections` vs 实际 channel） | **A**：`clientStatus.networkConnections` 与 `netstat` 的 ESTABLISHED 数差 ≤ 1 | M3.8.4 | 低（不影响功能，影响诊断） |
