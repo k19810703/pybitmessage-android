@@ -591,6 +591,26 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.45 ✅ M6 第一阶段：抽屉菜单 + 全部 tr._() 字符串中文化（2026-11-23 12:43）
+
+**问题**：主界面是中文，但抽屉菜单读作 Inbox / Sent / Draft / Trash / All Mails /
+Chat / Address Book / Settings…（英文）。上游的 `BaseLanguage._()` 是空壳
+（直接返回原文），且从未发过 Kivy 翻译文件。
+
+**实现**（commit `6cd7456`）：`Lang` 类内置 **88 条 ZH 词典**，`_()` 查表翻译
+（未命中回退英文）；`NavigateApp` 实例化改为 `Lang("zh")`。不改任何 kv 文件——
+所有 `app.tr._()` 调用点自动生效。
+
+**覆盖度验证**（AST 提取 + 单元检查）：从 main.kv / kv/*.kv / mpybit.py /
+baseclass/*.py 收集全部 **92 个真实 UI 字符串**，88 条已翻译、8 条豁免
+（端口号、主机名、协议名等技术值：0/00000.0/8444/9050/localhost/Namecoind/
+NMControl/UPnP）。**零缺失**。
+
+**包**：run 45112151883 → `/tmp/pybitmessage-m6.apk`（个钥重签，
+sha256 `f10a5be53fe4065bc1e8de38ca461c6eb5a16d86d9f839dc1a25a3e6e5fc433a`）
+字节码验证：ZH 词典（收件箱/已发送/通讯录…）与 `Lang("zh")` 均在包内。
+**待设备装机验证**（截图确认菜单中文显示）。
+
 ### 1.43 ◐ M4.5.1+M4.8.1 设备验收通过；M4.8.2 送达受阻；发现桥接 TLS 竞态（2026-11-23 12:06）
 
 **装机**：`/tmp/pybitmessage-m481.apk`（sha256 `777cd5cc…`，run 45104172546，
