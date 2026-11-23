@@ -559,6 +559,39 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.38 ✅✅ 点击打开详情成功（2026-11-23 09:05）
+
+接 1.37 的未完成项。**又踩了三个坑，都是设备日志/截图定位的**：
+
+| # | 尝试 | 现象 | 根因 | 处置 |
+|---|---|---|---|---|
+| 1 | 每行改成原生 `Button` | 布局崩坏：只显示 `…` / `来…` / `he…` | Button 内的 BoxLayout 尺寸塌陷 | **回退**为普通 BoxLayout |
+| 2 | 在 BoxLayout 上绑 `on_touch_*` / `ButtonBehavior` mixin | 无反应，无日志 | MDList/ScrollView 内布局收不到触摸 | 放弃 |
+| 3 | **在 MDList 上装 `on_touch_down` 命中测试** | ✅ `INBOX row tapped from=…` | —— | 采用 |
+| 4 | 弹 `MDDialog` 时传 `font_name` | 抛 `TypeError: Properties ['font_name'] ... may not be existing property names` | **MDDialog / MDFlatButton 根本没有 `font_name` 属性** | 去掉；对话框 chrome 用 ASCII（Message/Close），中文内容放在 custom content 里（原生 Label + CJK 字体） |
+
+**设备验证**（两条消息各点开一次）：
+
+```
+INBOX row tapped from=BM-2cXj6btesow8nHkDz1zEYSicugi1qMf7jf
+INBOX open detail from=BM-2cXj6btesow8nHkDz1zEYSicugi1qMf7jf len(body)=7
+INBOX open detail from=BM-2cSqxwX1LEDbPF93DJCKWYNU7v4bkADDY6 len(body)=61
+```
+
+截图确认弹窗内容：
+
+```
+Message
+主题：公网测试 1
+来自：BM-2cSqxwX1LEDbPF93DJCK...
+时间：2026-11-19 20:14:35
+hello via public network, from Mac at home (19:52) 中文+emoji ⊠
+Close
+```
+
+中文、英文、时间全部正确。**emoji 🎉 显示为 ⊠**——`NotoSansCJK` 不含 emoji 字形，
+属已知限制（后续可换 `NotoColorEmoji` 或多字体回退）。
+
 ### 1.37 ✅ 收件箱中文乱码修复 / ❌ 点击详情仍失败（2026-11-22 21:10）
 
 **用户截图反馈**：列表和详情里中文全是 □（豆腐块），英文正常。
