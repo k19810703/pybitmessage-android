@@ -232,7 +232,61 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ---
 
-## 6.2 ⏸ 最新暂停点（2026-11-22 21:10）—— **新 session 从这里开始**
+## 6.1 ✅ 稳定基线已建立（2026-11-23 09:42）—— **从这里继续**
+
+### 平板现状：**零热补丁，全部修复已固化进包**
+
+```
+包      : /tmp/pybitmessage-baseline-2026-11-23.apk
+sha256  : d3a0e650b38a86cfbfc6002c32b82f09947beb9c14a05fdaa67f7f00922a7225
+run     : 45094228488（commit b44b7b9）
+热补丁  : 无（files/app 下已无任何 .py）
+```
+
+**设备验证通过**（EVIDENCE §1.39）：启动无崩溃、收件箱中文正常、
+点击打开详情、前台服务 + WakeLock 正常、**发送消息实测成功**
+（发给 `BM-2cXj6btesow8nHkDz1zEYSicugi1qMf7jf`，状态 `msgsent`）。
+
+### 已完成的能力清单
+
+| 能力 | 状态 |
+|---|---|
+| 构建 / 地址 / 存储 / 公网连接 | ✅ |
+| 双向加密消息 + 回执 | ✅ |
+| 中文界面（主界面 + 抽屉 Inbox） | ✅ |
+| 收件箱点击看详情（含完整正文） | ✅ |
+| 发送消息（中文主界面） | ✅ 实测 |
+| Composer（英文页）发送崩溃 | ✅ 已修 |
+| 前台服务 + WakeLock | ✅ |
+| 历史 bytes repr 数据迁移 | ✅ |
+
+### 下一步（按优先级）
+
+| 顺序 | 任务 | 说明 |
+|---|---|---|
+| 1 | **M4.5.1 禁用云备份** | `allowBackup=false`，私钥不该进云端，1 小时 |
+| 2 | **M4.8.2 skipUntil 吞 getdata** | 消息「发出但永不送达」的根因，最影响可用性 |
+| 3 | **M4.8.1 singleCleaner 崩溃** | knownnodes 不落盘，重启后重新找节点 |
+| 4 | **M6 界面中文化** | 菜单 Sent/Draft/Trash/Settings 等仍是英文 |
+| 5 | M4.2.1 通知权限 | 新消息通知 |
+| 6 | D5 锁屏 30 分钟验收 → M5 交付 | 用户说最后做 |
+
+### 已知小问题（不阻塞）
+
+- emoji 🎉 显示为 ⊠（NotoSansCJK 无 emoji 字形）
+- 抽屉菜单项、Composer 页面仍是英文
+- 新消息无系统通知
+
+### 环境笔记
+
+- **GitHub 需走代理**：`export HTTPS_PROXY=http://proxy.apj.ibm.com:8080`，
+  然后 `gh api repos/k19810703/pybitmessage-android/actions/artifacts/<id>/zip > x.zip` 下载
+- 热补丁路径必须带 `pybitmessage/` 前缀：`files/app/pybitmessage/bitmessagekivy/…`
+- 数据备份：`/tmp/bk_{keys,msgs,kn}_base.dat`
+
+---
+
+## 6.2 ⏸ 历史暂停点（2026-11-22 21:10，已被 6.1 取代）
 
 ### 平板现状（重要：带热补丁）
 
