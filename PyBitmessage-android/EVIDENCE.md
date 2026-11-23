@@ -559,6 +559,41 @@ TCP connect 成功（lsof 可见 ESTABLISHED）
 
 **15:40 追记**：平板 API 后续查询超时（疑似锁屏休眠），成功快照以上表 15:16 时点为准。
 
+### 1.41 ✅ M4.8.2 完成：skip 窗口不再吞掉已有对象的 getdata（2026-11-23 11:02）
+
+**问题**（2026-11-19 公网实测发现，当晚 3 条消息卡死）：
+
+```
+节点全量同步中，peer 不断请求它还没下载到的对象 → 每次未命中
+antiIntersectionDelay() 都把 skipUntil 往后推 → 窗口无限滑动 →
+bm_command_getdata 在窗口内直接 return True，把请求整个丢弃
+→ 我们自己刚完成 PoW 的消息被 inv 通告了却永远不会被服务
+→「msgsent 但永不送达」
+```
+
+**修复**（commit `8664414`）：窗口内不再整单丢弃，改为**只排队我们实际持有的对象**
+（查 `state.Inventory`）；未持有的照旧丢弃。防御的时序性质不变——`UploadThread`
+本来就拒绝在 skipUntil 之前服务任何连接，排队只是让请求活到窗口打开之后。
+
+**单元验证**（真实方法绑定到假连接对象）：
+
+```
+skipUntil = now + 300s（窗口内）
+getdata = [已知对象 hash, 未知对象 hash]
+→ 已知对象进入 pendingUpload ✅
+→ 未知对象被丢弃（无 KeyError 风暴、无队列膨胀）✅
+（修复前：两个都被丢弃）
+```
+
+**包**：run 45102409426 → `/tmp/pybitmessage-m482.apk`（个钥重签，
+sha256 `6fe34d99517e3dc8a897e1f83d9246bba3c9e2426114b577ae0dc8a5c0932969`）
+字节码验证：`bm_command_getdata` 的 co_names 含 `state`/`Inventory`
+（修复前该方法不引用它们）。
+
+**待设备验收**（MILESTONES 的 **T** 标准：新地址间送达 P95 ≤ 5 分钟）：装机后
+发消息实测。装机等用户确认——M4.8.2 的包**包含** M4.5.1（allowBackup=false），
+直接装 m482 包即可两个都验。
+
 ### 1.40 ✅ M4.5.1 完成：allowBackup=false，私钥不再进云备份（2026-11-23 10:02）
 
 **问题**（aapt2 实测基线包）：
