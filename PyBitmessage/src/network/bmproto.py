@@ -361,6 +361,22 @@ class BMProto(AdvancedDispatcher, ObjectTracker):
         # skip?
         now = time.time()
         if now < self.skipUntil:
+            # Anti-intersection window (M4.8.2): upstream drops the whole
+            # request here. On a node still syncing the network that is
+            # fatal: peers keep asking for objects we have not downloaded
+            # yet, each miss extends skipUntil, and the window slides
+            # forward indefinitely -- so getdata for objects we DO have
+            # (e.g. our own freshly-PoW'd message) is discarded and the
+            # object is announced but never served. Queue what we actually
+            # hold instead; UploadThread still refuses to serve anything
+            # until skipUntil has passed, so the timing property of the
+            # defense is unchanged, and requests for objects we do not
+            # have stay dropped exactly as before (no KeyError storm).
+            for raw in items:
+                h = bytes(raw) if isinstance(
+                    raw, (bytearray, memoryview)) else raw
+                if h in state.Inventory:
+                    self.pendingUpload[h] = now
             return True
         for raw in items:
             # keys must be the raw bytes hashes, otherwise the upload thread
