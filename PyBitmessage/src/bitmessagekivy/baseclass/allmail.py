@@ -52,19 +52,31 @@ class AllMails(Screen):
         self.account = self.kivy_state.selected_address
         from pybitmessage.bitmessagekivy.baseclass.mail_list import (
             render, show_detail)
-        self.queryreturn = render(self, 'all', on_tap=show_detail)
-        self.ids.tag_label.text = 'All Mails' if self.all_mails else ''
+        # render() returns the rows, so all_mails reflects reality (it used to
+        # stay an empty ListProperty, which made _update_mail_count() take the
+        # empty branch and paint "暂无消息" over the rows we had just added).
+        self.all_mails = render(self, 'all', on_tap=show_detail)
+        self.queryreturn = self.all_mails
+        self.ids.tag_label.text = '全部邮件' if self.all_mails else ''
         self._update_mail_count()
 
     def _update_mail_count(self):
-        """Update the mail count and handle empty states."""
-        if self.all_mails:
-            total_count = int(self.kivy_state.sent_count) + int(self.kivy_state.inbox_count)
-            self.kivy_state.all_count = str(total_count)
-            self.set_all_mail_count(self.kivy_state.all_count)
-        else:
-            self.set_all_mail_count('0')
-            self.ids.ml.add_widget(empty_screen_label(self.label_str))
+        """Update the badge with the real row count.
+
+        The empty state is drawn by render(), so nothing is added here -- the
+        old code appended an empty-screen label straight into ids.ml, which
+        hid the messages.
+        """
+        count = len(self.all_mails or [])
+        self.kivy_state.all_count = str(count)
+        self.set_all_mail_count(count)
+
+    def on_pre_enter(self, *args):
+        """Reload whenever the screen is opened."""
+        try:
+            self.load_message_list()
+        except Exception as exc:  # noqa: BLE001
+            print('ALLMAIL refresh failed: %r' % (exc,), flush=True)
 
     @staticmethod
     def set_all_mail_count(count):

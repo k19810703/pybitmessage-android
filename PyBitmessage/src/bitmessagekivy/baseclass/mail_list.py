@@ -147,6 +147,9 @@ def render(screen, folder, empty_text='（暂无消息）', on_tap=None):
     font = cjk_font()
     rows = load_folder(folder)
     ml.clear_widgets()
+    print('LIST render %s by %s: ml id=%s rows=%d children_before=%d' % (
+        folder, type(screen).__name__, id(ml) % 100000, len(rows),
+        len(ml.children)), flush=True)
     if not rows:
         ml.add_widget(Label(text=empty_text, font_name=font,
                             color=(.5, .5, .5, 1)))
@@ -169,6 +172,8 @@ def render(screen, folder, empty_text='（暂无消息）', on_tap=None):
             item.touch_args = row
         ml.add_widget(item)
 
+    print('LIST render %s by %s done: children=%d' % (
+        folder, type(screen).__name__, len(ml.children)), flush=True)
     if on_tap is not None:
         _install_taps(ml, on_tap)
     return rows
