@@ -121,6 +121,17 @@ class TCPConnection(BMProto, TLSDispatcher):
         except AttributeError:
             return self.destination
 
+    # M4.8.2b: bounds for the anti-intersection window. The raw formula
+    # gives ~20s per extension (queueCount is the number of MultiQueue
+    # subqueues, 10), and every object a peer requests but we do not have
+    # extends the window again. During a full-network sync misses arrive
+    # faster than the window closes, so skipUntil slides forward forever,
+    # DownloadThread then skips the connection on every pass (it checks
+    # skipUntil too) and NOTHING is ever fetched again -- observed live as
+    # "inv received, object never downloaded" on 2026-11-23.
+    _AI_MAX_DELAY = 30.0        # cap on one window, seconds
+    _AI_EXTEND_INTERVAL = 60.0  # min seconds between miss-triggered extends
+
     def antiIntersectionDelay(self, initial=False):
         """
         This is a defense against the so called intersection attacks.
@@ -130,6 +141,10 @@ class TCPConnection(BMProto, TLSDispatcher):
         estimate how long an object will take to propagate across the
         network, and skip processing "getdata" requests until then. This
         means an attacker only has one shot per IP to perform the attack.
+
+        A miss-triggered extension is rate-limited to one per
+        ``_AI_EXTEND_INTERVAL``: bulk-sync misses are traffic, not probes,
+        and without the limit the window never reopens (see M4.8.2b).
         """
         # estimated time for a small object to propagate across the
         # whole network
@@ -137,6 +152,7 @@ class TCPConnection(BMProto, TLSDispatcher):
             len(knownnodes.knownNodes[x]) for x in knownnodes.knownNodes)
         delay = math.ceil(math.log(max_known_nodes + 2, 20)) * (
             0.2 + invQueue.queueCount / 2.0)
+        delay = min(delay, self._AI_MAX_DELAY)
         # take the stream with maximum amount of nodes
         # +2 is to avoid problems with log(0) and log(1)
         # 20 is avg connected nodes count
@@ -149,10 +165,15 @@ class TCPConnection(BMProto, TLSDispatcher):
                         'Initial skipping processing getdata for %.2fs',
                         self.skipUntil - time.time())
             else:
+                now = time.time()
+                if now < getattr(
+                        self, '_aiLastExtend', 0) + self._AI_EXTEND_INTERVAL:
+                    return
+                self._aiLastExtend = now
                 logger.debug(
                     'Skipping processing getdata due to missing object'
                     ' for %.2fs', delay)
-                self.skipUntil = time.time() + delay
+                self.skipUntil = now + delay
 
     def checkTimeOffsetNotification(self):
         """
