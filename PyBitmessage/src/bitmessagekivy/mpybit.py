@@ -363,10 +363,25 @@ class NavigateApp(MDApp):
         self.root.ids.toolbar.left_action_items = [
             ['arrow-left', lambda x: self.back_press()]]
         self.root.ids.toolbar.right_action_items = [
-            ['refresh',
-             lambda x: self.root.ids.id_create.children[1].reset_composer()],
-            ['send',
-             lambda x: self.root.ids.id_create.children[1].send(self)]]
+            ['refresh', self._composer_action('reset_composer')],
+            ['send', self._composer_action('send')]]
+
+    def _composer_action(self, method_name):
+        """Call a method on the composer, reporting instead of crashing.
+
+        The toolbar used to call ``...children[1].send(self)`` and the
+        composer had no ``send`` at all; the AttributeError escaped into
+        Kivy's event loop and froze the whole UI. Any failure is now logged
+        and swallowed.
+        """
+        def _action(*_args):
+            try:
+                composer = self.root.ids.id_create.children[1]
+                getattr(composer, method_name)()
+            except Exception as exc:  # noqa: BLE001
+                print('COMPOSER %s failed: %r' % (method_name, exc),
+                      flush=True)
+        return _action
 
     def set_identicon(self, text):
         """Show identicon in address spinner"""
