@@ -591,6 +591,50 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.49 ✅✅✅ M4.8.7：中文主题消息被静默丢弃的根因与修复（2026-11-23 16:50）
+
+**故障现象**：用户问"平板上没有新消息吗"——Mac 发的 7 条测试消息（14:45–16:02）全部未达，
+但 11:33 的 ASCII 主题消息（M481-test）成功送达且收到回执。
+
+**完整排查链**（每一步都有设备实测证据）：
+
+| # | 假设 | 验证方法 | 结论 |
+|---|---|---|---|
+| 1 | 下载停滞（skipUntil） | 库存 hash 差集 | **部分成立**：M4.8.2b 修复后对象能下载了，但消息仍未入库 |
+| 2 | 公钥错误 | 重算 ripe（先漏 \x04 前缀误判，修正后） | ❌ 公钥完全匹配 |
+| 3 | 解密失败 | 本地用平板私钥解密 Mac 对象 | ❌ 解密成功（密钥正确） |
+| 4 | 验签失败 | **processmsg 加 PROCMSG 打点热补丁** | ✅ **实锤**：`DECRYPT OK` → `ECDSA verify FAILED`，且 sig=22B（正常 ~70B） |
+
+**根因**（`helper_msgcoding.py encodeSimple`）：
+
+```python
+self.data = 'Subject:%(subject)s\nBody:%(body)s' % message   # str
+self.length = len(self.data)                                   # ← 字符数，不是 UTF-8 字节数！
+```
+
+中文主题下 `len(str) < len(utf-8)`（每字差 2 字节）→ 对象里 msglen 偏短 →
+接收方解析错位（acklen/siglen 读到垃圾）→ 验签必败 → `logger.debug('ECDSA verify
+failed')` 静默丢弃（该级别不进 logcat，所以之前完全看不见）。
+
+**为什么以前"能用"**：api.py 的 repr 入库 bug（M3.9.1c 修复）曾把中文主题存成
+纯 ASCII 的 `b'\xe5..'` 字符串——字符数恰好等于字节数，不错位。修好 api.py 后
+这个底层 bug 才暴露。**今天所有失败消息全是有中文主题的；ASCII 主题全成功**——
+证据完全吻合。
+
+**修复**（commit `40dcb8a`）：`encodeSimple`/`encodeTrivial` 改为产出 bytes 并按
+字节计数；接收端 `decodeSimple` 本就兼容 bytes。
+
+**设备端到端验证**：16:36 发「中文修复验证」→ 16:48:07 平板日志
+`DECRYPT OK + ECDSA verify PASSED` → 收件箱显示完整中文主题和正文。
+
+**过程中顺带完成**：
+- M4.8.2b（`599214c`）：anti-intersection 窗口限频（每连接 60 秒最多延长一次、
+  单窗封顶 30 秒）——修复了"inv 收到但对象永不下载"
+- processmsg 保留精简打点（DECRYPT OK / 验签结果 / 转发攻击检查）
+
+**待办**：CI run 45141802772 出包后装机固化（平板当前跑
+class_objectProcessor.py 热补丁 + Mac 节点已带修复）。
+
 ### 1.48 ✅✅ M6 第二阶段：Sent/Draft/Trash/AllMails 四个空壳页面修复（2026-11-23 14:41）
 
 **问题**：这四个抽屉页面和最初的 Inbox 一样是空壳——`loadSent()` / `load_draft()` /
