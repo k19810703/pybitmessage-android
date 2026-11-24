@@ -591,6 +591,55 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.51 ◐ M4.2.1：通知权限 + 新消息通知（代码完成，待装机）（2026-11-24 08:40）
+
+**任务缺口调研（先读代码再动手）**：
+
+| 项 | 现状（动手前） | 结论 |
+|---|---|---|
+| 清单权限 `POST_NOTIFICATIONS` | `buildozer.spec` 已声明（M4.1c） | 有声明 ≠ 有授权（API 33+） |
+| 运行时申请 | **全仓库零调用**（`grep requestPermissions` 无结果） | ❌ 缺 |
+| 新消息通知 | 核心**已经**对每条入库消息发 `displayNewInboxMessage`（`class_objectProcessor.py:691`），但 Kivy 侧 `UIkivySignaler` 只处理 3 种命令，这条**被直接丢弃** | ❌ 缺 |
+| 前台服务通知 | `core_service.py` 自建可见渠道 | 已有，但同样被权限卡住 |
+
+**实现**（commit `01e8892`）：
+
+- **新增 `src/android_notify.py`**
+  - `request_permission_once()`：API 33+ 调 `activity.requestPermissions([POST_NOTIFICATIONS])`，
+    每进程只问一次；API < 33 直接跳过并打日志。**不用结果回调**（需要 Java 侧 receiver，
+    `android_keepalive.install()` 里踩过一次 JNI 崩溃），是否授权在下一次启动由
+    `has_permission()` 打日志。
+  - `ensure_channel()`：独立渠道 `pybitmessage_messages`（IMPORTANCE_HIGH），
+    用户可单独静音「新消息」而不影响前台服务通知。
+  - `notify_message(from, subject, body)`：标题「新消息」，正文取主题（超 40 字截断），
+    **正文永不进通知**（锁屏会显示通知内容）；`privacy=True` 只显示发件地址。
+    固定 id 覆盖更新，不堆叠。
+  - `install_message_hook()`：守护线程 `get_nowait` **查看** `UISignalQueue`，
+    命中 `displayNewInboxMessage` 后**原样 put 回去**再通知——队列所有者仍是
+    `UIkivySignaler`，不抢消费。
+- **`src/main.py`**：在已有的 `KEEPALIVE 8s` 主线程回调里（Kivy Clock，避开 SDL/JNI 坑）
+  依次调用 权限 → 渠道 → hook，整体 try/except，失败不阻塞启动。
+
+**单元测试**（`src/tests/test_android_notify.py`，3 条全过）：
+
+```
+$ cd PyBitmessage/src && python3 -m unittest tests.test_android_notify -v
+test_inbox_signal_is_notified_and_requeued ... ok     # 通知发出 + 信号仍可被消费
+test_other_commands_are_not_notified ... ok           # 其它命令不触发通知
+test_all_entry_points_are_noops_without_android ... ok
+Ran 3 tests ... OK
+```
+
+`python3 -m compileall -q src | grep -c "Error compiling"` → **0**。
+
+**CI**：run 45298351539（2026-11-24 00:35 UTC 触发）。
+
+**待做（设备验收，需用户确认后执行）**：
+
+- **S**：首次启动出现系统授权弹窗；允许后通知栏出现前台服务通知
+- **S**：收到一条消息 → 通知栏出现「新消息 / 主题」
+- **S**：拒绝授权后 App 不崩、照常收发（只是无通知）
+
 ### 1.50 ✅✅ M4.8.7 正式包装机 + 7 条丢弃消息全部恢复（2026-11-23 20:51）
 
 **装机**：`/tmp/pybitmessage-m487.apk`（run 45141802772，个钥重签，

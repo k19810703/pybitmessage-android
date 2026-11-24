@@ -267,18 +267,52 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 
 ### 新 session 下一步（按优先级）
 
-1. **M4.2.1** 通知权限（Android 13+ POST_NOTIFICATIONS 运行时申请，新消息系统通知）
-2. **D5 验收**：锁屏 30 分钟 + 期间收到消息（前台服务 + WakeLock 已就位）
-3. M4.8.3/4/5：SIGTERM 关闭挂死、networkConnections 计数失真、doingmsgpow 偶发卡顿
-4. M5 交付：README-ANDROID、回归 D1–D7、最终包 + SHA256
-5. M6 收尾：搜索框 "Search" 硬编码英文等小项
-6. 平板横屏适配（KIVY_ORIENTATION=Portrait 写死）
+0. ~~**M4.2.1** 通知权限~~ → **代码已完成**（commit `01e8892`，EVIDENCE §1.51，CI run 45298351539）：
+   运行时申请 + 新消息通知。**只差装机验收**（见 §6.0c）
+1. **D5 验收**：锁屏 30 分钟 + 期间收到消息（前台服务 + WakeLock 已就位）
+2. M4.8.3/4/5：SIGTERM 关闭挂死、networkConnections 计数失真、doingmsgpow 偶发卡顿
+3. M5 交付：README-ANDROID、回归 D1–D7、最终包 + SHA256
+4. M6 收尾：搜索框 "Search" 硬编码英文等小项
+5. 平板横屏适配（KIVY_ORIENTATION=Portrait 写死）
 
 ### 消息收发状态总结（用户关心的问题的最终答案）
 
 - **中文收发**：✅ 已修复并实测（23 秒送达）
 - **发给 sjy**：一条已确认，一条在网（TTL 至 11-27，等他上线）
 - **11-19 的两条**：已丢失（TTL 过期 + 旧地址私钥丢失）
+
+---
+
+## 6.0c 🔜 待装机验收：M4.2.1 通知权限 + 新消息通知（2026-11-24 08:45）
+
+**代码**：`src/android_notify.py`（新增）+ `src/main.py` 挂接，commit `01e8892`。
+**包**：CI run 45298351539 的 `pybitmessage-apk-<N>`，需 `scripts/resign-apk.sh` 个钥重签后覆盖安装。
+**前置**：设备 USB 连上（`adb devices` 应见 `b45f8e87`）。装包前先备份 keys/messages。
+
+**验收步骤**（S 类，每步截图）：
+
+```bash
+ADB=~/Documents/platform-tools/adb; PKG=at.bitmessage.pybitmessage
+# 1) 装包 + 启动
+$ADB -s b45f8e87 push /tmp/pybitmessage-m421.apk /data/local/tmp/bm.apk
+$ADB -s b45f8e87 shell pm install -r -d /data/local/tmp/bm.apk
+$ADB -s b45f8e87 logcat -c
+$ADB -s b45f8e87 shell am start -n $PKG/org.kivy.android.PythonActivity
+sleep 25
+# 2) 期望日志
+$ADB -s b45f8e87 logcat -d | grep -E "NOTIFY|KEEPALIVE|SERVICE startForeground"
+#    → NOTIFY: POST_NOTIFICATIONS requested   （平板是 Android 13，会走 API 33 分支）
+#    → NOTIFY: message hook started
+# 3) 此时屏幕应弹「允许 PyBitmessage 发送通知？」→ 点允许
+# 4) 下拉通知栏：应有前台服务通知「PyBitmessage 正在运行」
+$ADB -s b45f8e87 exec-out screencap -p > /tmp/notif-perm.png
+# 5) 从 Mac 节点发一条中文消息 → 通知栏出现「新消息 / 主题」
+grep -i "NOTIFY: message from" <(logcat)
+```
+
+**若被拒授权**：`has_permission()` 返回 False，日志 `NOTIFY: skipped, POST_NOTIFICATIONS not granted`；
+App 不崩、收发照常，只是没有通知——**这是通过标准之一，不是失败**。
+想重新弹窗需到系统设置里重置该应用的通知权限（Android 13 不会二次自动弹）。
 
 ---
 
