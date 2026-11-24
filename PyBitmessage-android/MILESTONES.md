@@ -351,8 +351,8 @@ M4.8.2 建议在 M4.3（保活）验证同期处理，因为它与"消息能否�
 | M5.2.1 ✅ | （可选）release keystore 与统一签名 | 2h | **L**：`apksigner verify` 通过；覆盖安装不丢数据 | 已完成：`scripts/resign-apk.sh` 首次生成稳定钥匙并打印指纹（`82463dfe…`）；workflow 增加可选 release 签名步骤（缺 secret 时自动跳过）；`INSTALL.md` §2.5 写了备份与配置步骤。**覆盖安装不丢数据**已多次实测（最近一次 m452→0.6.3.2，2 地址/14 条消息完好） |
 | M5.3.1 ✅ | `README-ANDROID.md`：安装/首配/互换地址 | 3h | **S**：他人按文档 10 分钟完成 D1–D3 | 已交付：安装/通知权限/ROM 保活/互换地址/耗时预期/隐私说明；旧 `INSTALL.md` 的过时结论（低难度、C PoW 缺失）已同步修正 |
 | M5.3.2 ✅ | 故障排查章节（连不上/收不到/耗电） | 2h | 文档覆盖 3 类常见问题 | 已交付：`README-ANDROID.md` §5 含连不上（dead knownnodes 诊断命令）/收不到（4 项排查表）/耗电/通知/豆腐块共 6 类 |
-| M5.4.1 | 回归 D1–D7 全跑一遍 | 4h | **全绿** |
-| M5.4.2 | 产出最终 APK + SHA256 | 1h | `shasum -a 256` 与发布说明一致 |
+| M5.4.1 ◐ | 回归 D1–D7 全跑一遍 | 4h | **全绿** | **脚本已就绪**：`scripts/regression-d1-d7.py`（A=Mac pubnet 节点，B=平板；D1/D2/D3/D4/D6/D7 全自动，D5 按用户要求显式 SKIP 而不是算通过）。**尚未跑通**：运行需要 Bitmessage 在前台，而当时平板被 MIUI 冻结在后台（UDP `PermissionError`、API 拒连），等设备空闲 |
+| M5.4.2 ✅ | 产出最终 APK + SHA256 | 1h | `shasum -a 256` 与发布说明一致 | **已发布**：<https://github.com/k19810703/pybitmessage-android/releases/tag/v0.6.3.2>，`pybitmessage-0.6.3.2-arm64-v8a.apk`（26 MB，sha256 `5d3fd7b0…128c9`）+ `SHA256SUMS`；发布说明见 `release/RELEASE.md` |
 
 > **Gate G5（项目出口）**：D1–D7 全绿；一台"干净"手机按文档完成互通。
 

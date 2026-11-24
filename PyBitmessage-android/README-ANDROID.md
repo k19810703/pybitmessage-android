@@ -29,6 +29,15 @@
 
 ---
 
+## 0.5 下载
+
+最新侧载包：<https://github.com/k19810703/pybitmessage-android/releases/latest>
+
+```bash
+# 校验（发布的 SHA256SUMS 里同时带 S 和 R 行的 cert 指纹）
+shasum -a 256 -c SHA256SUMS
+```
+
 ## 1. 安装
 
 ### 1.1 前提
