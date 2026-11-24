@@ -205,6 +205,16 @@ def schedule_android_keepalive(delay=8.0):
         return
 
     def _setup(_dt):
+        # M4.2.1: ask for POST_NOTIFICATIONS (API 33+) before anything is
+        # posted; without it both this and the new-message note are silent
+        # no-ops. The hook turns inbox signals into notifications.
+        try:
+            import android_notify
+            android_notify.request_permission_once()
+            android_notify.ensure_channel()
+            android_notify.install_message_hook()
+        except Exception as exc:  # noqa: BLE001
+            print('NOTIFY setup failed: %r' % (exc,), flush=True)
         try:
             import android_keepalive
             if android_keepalive.install():
