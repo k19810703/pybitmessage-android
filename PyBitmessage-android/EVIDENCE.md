@@ -591,6 +591,44 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.57 ◐ M5.2.1 统一签名 + M5.4.2 发布 + M5.4.1 回归脚本（2026-11-24 15:50）
+
+**M5.2.1 统一签名**
+
+| 交付 | 内容 |
+|---|---|
+| 稳定签名 | `scripts/resign-apk.sh` 首次生成 `~/.pybitmessage-android/signing.keystore`，之后每包复用；结尾打印证书指纹便于比对 |
+| 指纹 | `SHA-256: 82463dfe0a7ef14821c33fef5e462e1f7bed070387de2bee7e9dd4fdebc551c7`（`CN=PyBitmessage Android`） |
+| CI 自动签 | workflow 新增 `Sign with the release keystore (optional)`：有 `RELEASE_KEYSTORE_B64/PASS/ALIAS` 就用它签，没有则打印提示后跳过（已实测跳过分支，构建 11m07s 成功） |
+| 文档 | `INSTALL.md` §2.5：本地重签 vs CI 签两条路，含 keystore 备份警告 |
+
+**M5.4.2 发布**
+
+- GitHub Release：<https://github.com/k19810703/pybitmessage-android/releases/tag/v0.6.3.2>
+- 资产：`pybitmessage-0.6.3.2-arm64-v8a.apk`（26,974,744 B）+ `SHA256SUMS`
+- sha256 `5d3fd7b0ec8e54042fb3d0d6fbfc598c6b9053f8d97d4c6b6d117d7949e128c9`
+- `aapt2` 复核：`versionName=0.6.3.2`、`application-label:'PyBitmessage'`、
+  `application-icon-480:'res/mipmap/icon.png'`、`native-code:'arm64-v8a'`、
+  权限含 `INTERNET / FOREGROUND_SERVICE / POST_NOTIFICATIONS / WAKE_LOCK`
+- 发布说明 `release/RELEASE.md`（安装、校验、签名核对、能力清单、已知限制）
+
+**M5.4.1 回归脚本（已就绪，未跑通）**
+
+`scripts/regression-d1-d7.py`：
+
+- **A = Mac** 上脚本自启的 `pubnet_node.py`（临时 home，API :8451）
+- **B = 平板**，经 `adb forward 8445→8442` 的 XML-RPC
+- 自动执行 D1（双方各有地址）、D2（地址进通讯录）、D3（B→A）、D4（A→B，
+  轮询直到主题出现并报实际耗时）、D6（force-stop 重启后地址/消息/联系人逐项比对）、
+  D7（logcat 抓 FATAL/Traceback/THREAD-CRASH）
+- **D5 显式 SKIP 并注明"用户要求放到最后"**——闸门项不因为"没人看"就算绿
+- 可选 `--no-restart`（不动 App）、`--skip-send`、`--json/--markdown` 出报告
+
+**为什么没跑通**：第一次 `--skip-send --no-restart` 就卡住——平板 API 拒连，
+logcat 每秒一条 `socket error on sendto: PermissionError`（`network/udp.py:146`），
+即 **MIUI 把后台的 App 冻结了**（当时前台是游戏）。这是已知的 R12/MIUI 行为，
+不是本轮改动引入的。回归需要 App 在前台跑，只能等设备空闲。
+
 ### 1.56 ✅ M5.1.1 图标定稿 + M5.1.2 版本号对齐（2026-11-24 15:10）
 
 **M5.1.1 应用图标**
