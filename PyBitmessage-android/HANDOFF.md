@@ -317,6 +317,48 @@ App 不崩、收发照常，只是没有通知——**这是通过标准之一�
 
 ---
 
+## 6.0f ✅ 2026-11-24 11:50：M4.2.1 设备验收通过、M4.8.9 关闭（新 session 从这里开始）
+
+### 平板当前状态（干净，零热补丁）
+
+```
+包     : /tmp/pybitmessage-m421final-2026-11-24.apk
+        run 45320464967 · 本钥重签 · sha256 92dbea1d…20fa9 · 25 MB
+热补丁 : 无（files/app 下无任何 .py）
+地址   : BM-2cXrmLDcoGry6Z4kRWqCthD7kuhRxkzaWx（label=phone）
+         BM-2cWGibweLdxrUHN2JaLhGiBtekxZAw2ufV（label=HD）
+收件箱 : 14 条
+连接   : 2–5 条 established（真实公网对端，UA=/PyBitmessage:0.6.3.2/ 等）
+配置   : keys.dat 已开 API（u:p@8442，adb forward 8445）；knownnodes 为 4 个活节点
+备份   : /tmp/bk_m489/{keys,messages,knownnodes}.dat（本轮装机前的原始文件）
+```
+
+### 本轮完成的两个任务
+
+| 任务 | 结果 | 证据 |
+|---|---|---|
+| **M4.2.1** 通知权限 + 新消息通知 | ✅ **设备验收通过** | EVIDENCE §1.54，截图 3 张（授权弹窗 / 服务通知 / **新消息+中文主题**） |
+| **M4.8.9** 公网连接被断 + inv 不发 | ✅ **关闭**（环境 + 配置，非代码） | EVIDENCE §1.54：换活节点后 6→5 条稳定 ≥10 分钟、`INVTHREAD sending` 14 次、`recv inv` 17 次 |
+
+### 设备验收才暴露的 3 个真 bug（都已修 + 已出包）
+
+1. jnius 手写 `String[]` → `JavaException('No constructor available')`
+   → 改用 p4a `android.permissions` 助手
+2. 轮询 `UISignalQueue` 与 `UIkivySignaler` 抢消费 → 通知永远不出现
+   → 改为包装 `helper_inbox.insert`
+3. `Notification.Builder.setShortCriticalText()` 在 API 33 不存在（我按 sdk≥31 判据写错）
+   → 删除
+
+### 下一步（按优先级）
+
+1. **M4.8.9 遗留观察项**：日志有 `INVTHREAD skip stream 1 not in [0]`（少量连接 version 未解析完就被跳过）
+2. **D5 锁屏 30 分钟验收**（G4 最后一项，用户说最后做）
+3. M4.8.4 `networkConnections` 计数失真（本次见 `outbound total=57`，明显偏多）
+4. M5 交付（README-ANDROID / 回归 D1–D7 / 最终包 + SHA256）
+5. M6 收尾（搜索框硬编码英文、横屏适配）
+
+---
+
 ## 6.0e ✅ 2026-11-24 11:05：M4.8.9 定性完成（RST 来自对端）+ 3 个真实修复
 
 **结果**：线缆抓包证明「公网连接建立后数秒被断开」是**对端主动 RST**，不是我们的 bug
