@@ -591,51 +591,99 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
-### 1.53 ◐◐◐ M4.8.9 根因判定：公网对端主动发 RST（重置连接），并修掉 2 个真实缺陷（2026-11-24 10:55）
+### 1.54 ✅✅✅ 设备验收：M4.2.1 通过 + M4.8.9 关闭（2026-11-24 11:45）
 
-**结论先说**：公网连接「建立后数秒被断开」**不是我们的 bug 造成的**——对端（Bitmessage 公网节点）
-在收到我们格式正确的 `verack` 后主动发 **TCP RST**。两个真实缺陷（`inv` 不发、分帧）已在本轮修掉，
-并新增回归测试。
+**设备**：小米平板 5 `b45f8e87`（Android 13 / API 33）
+**包**：`m489`（run 45315773202，本钥重签）→ 装机后两处**热补丁**（`android_notify.py`）
+**数据**：装机前已备份 `keys.dat`(1862B) / `messages.dat`(11.1MB) / `knownnodes.dat` 到 `/tmp/bk_m489/`；
+装后私钥与消息库**字节数不变**，2 个地址 `BM-2cXrmLDco…` / `BM-2cWGibweLd…` 完好。
 
-**本轮抓到的线缆级证据（`/tmp/tap.py`，作为连接级 tap 包住 socket）**
+#### M4.2.1 通知权限 —— **通过**
 
-```
-TAP t+0.28 -> version(105)                 # 我们发 version
-TAP t+1.21 <- 24B verack(0)                # 对端 ACK
-TAP t+2.02 <- 24B version(105)             # 对端 version
-TAP t+4.03 <- 105B payload                 # 对端 version 正文
-TAP t+6.03 -> verack(0),addr(39)           # 我们回 verack + addr（帧格式已校验：24B 头、12 字节命令）
-TAP t+8.94 <- ConnectionResetError(54)     # 对端 RST
-```
+| 验收 | 证据 |
+|---|---|
+| **S** 首次启动有授权弹窗 | 截图：`artifacts/m421-permission-dialog.png`（「是否允许"PyBitmessage"发送通知 / 拒绝 / 始终允许」） |
+| **S** 授权后前台服务通知 | 截图：`artifacts/m421-service-notification.png`（通知栏「PyBitmessage 正在运行」）；`dumpsys` 见 `id=1001 channel=pybitmessage_service` |
+| **S** 收到消息弹通知 | 截图：`artifacts/m421-new-message-notification.png`（通知栏「**新消息** 通知验证第三条」）；日志 `NOTIFY: message from BM-2c… posted (subject)` |
+| 拒绝后不崩 | 首次我误点在按钮外（= 拒绝），App 照常运行、收发不受影响 |
 
-- 我们发的 `verack` 头 **24 字节、命令字段 12 字节零填充**，`addr` 载荷长度字段与头部一致——
-  **线缆格式没有错**；
-- 之后对端没有任何 `error` 包，直接 RST；
-- 同一节点不同时刻行为不同（有时回 `Too many connections from your IP`，有时正常 ACK 后 RST），
-  说明对端在**版本校验之外的策略**上拒绝我们（本机无 TLS 证书 `isSSL=False`，公网节点
-  普遍要求 `NODE_SSL`）。
+**设备验收暴露并修掉的 3 个真 bug**（都只在真机上才会显形）：
 
-**顺带修掉的 2 个真实缺陷**
-
-| 缺陷 | 现象 | 修复 | 验证 |
+| # | 症状 | 根因 | 修复 |
 |---|---|---|---|
-| **`CreatePacket` 命令字段未补齐到 12 字节**（`struct` 对短 *bytes* 不做填充，对 str 才补） | `verack`(6B)/`addr`(4B) 的头部少 2/8 字节，后续字段整体错位；任何非 7/12 长度的命令都会让对端无法解析 | `protocol.py`：`command[:12].ljust(12, b'\x00')` | `tests/test_packet_framing.py` 7 条（含回归：必须补齐、头长恒为 24、`version/addr/error` 返回完整包） |
-| **`addresses.assembleAddrMessage` / `createAddrMsg` 系列返回的是「裸头」而不是完整包** | 调用方两种写法都是错的：`CreatePacket('addr', header)` 得 63B（旧自制样本也是 63B，问题被它掩盖）；`bytes(header)+payload` 得 40B（命令字段变 16 字节） | `protocol.py`：三个 `assemble*` 改为返回 `CreatePacket(...)` 的**完整包字节**；`CreatePacket` 对 payload 做 `bytes()` 归一 | 同上测试 |
-| **`tcp.handle_read` 在「socket 报可读但 0 字节」时会走 asyncore 通用路径把健康连接关掉** | 公网节点偶发静默唤醒，`recv()` 返 `b""` → `handle_close()`，无 `close_reason`、无 `error` 包（EVIDENCE §1.52 的"2–6 s 被拆"里有一部分是这个） | `tcp.py`：`lastTx` 超 `STALE_READ_GRACE`(15 s) 且本次读入 0 字节时，判定为陈旧唤醒并跳过（打 `TCP stale read ignored` 日志） | 只在 `!fullyEstablished` 分支生效；不改动正常收发路径 |
+| 1 | `NOTIFY: request failed: JavaException('No constructor available')` | 手写 jnius 创建 `String[]`（`autoclass('[Ljava.lang.String;')(1)`）在设备上不可用 | 改用 p4a 的 `android.permissions.request_permissions`（带手写回退） |
+| 2 | 权限授了、消息到了，**通知不出现** | 原实现**轮询** `queues.UISignalQueue`，但该队列的所有者是 `UIkivySignaler`，UI 通常先取走 | 改为包装 `helper_inbox.insert`（核心唯一入库点），与 UI 无竞争 |
+| 3 | `NOTIFY: message notification failed: AttributeError('...setShortCriticalText')` | 我按 `sdk >= 31` 调用，但该方法 **API 36 才有** | 删除该调用 |
 
-**测试**：`python3 -m unittest tests.test_packet_framing tests.test_shutdown tests.test_android_notify`
-→ **15 条全过**；`compileall` 0 错误。
-**注**：修复前后抓到的 `verack` 字节完全一致——这恰好证明旧代码在"空载荷"这一特例下碰巧产出正确头部，
-畸形帧只在 `addr` 等带载荷命令上出现，公网对端第一次见到 `addr` 就 RST。
+单测同步改写（`tests/test_android_notify.py` 3 条：入库触发一次通知 / trash 文件夹不通知 / 无 Android 环境全 no-op）。
 
-**遗留（需要新的验证路径，不是代码问题）**：
+#### M4.8.9 公网连接 —— **关闭**（是环境 + 配置问题，不是协议 bug）
 
-1. 本机（无 `sslkeys` 证书）连接公网节点会被 RST —— **要验证公网收发，必须用带 TLS 证书的环境**，
-   或把证书生成纳入构建（M2 阶段就有此计划，`state.disable_tls` 注释里写明）；
-2. 由此，M4.8.9 的验收（公网持续 ≥10 分钟 + 出现 `inv`）**本机无法完成**，需要在
-   ①带证书的桌面节点 或 ②平板（已有实网历史证据）上测；
-3. `inv` 不发的直接原因仍取决于连接能活下来（`sendBigInv` 在 `set_connection_fully_established`
-   里调用，连接被 RST 后自然看不到后续）。
+| 阶段 | 观测 | 结论 |
+|---|---|---|
+| 沿用旧 `knownnodes.dat`（11-20 遗留） | `networkConnections=0`；`listConnections` **57 条 outbound 全 `fullyEstablished=false`**、`userAgent=''`；这些对端**零 BMPROTO 日志** | knownnodes 全是死节点，握手无从开始 |
+| 换 4 个活节点（`85.114.135.102` / `194.164.163.84` / `185.158.248.216` / `158.69.63.42`，rating=1） | `networkConnections=6`、`numberOfMessagesProcessed=**297**`、`TCP established` 6 次、`recv inv` 12 次 | 全链路恢复 |
+| 11:28–11:43 持续观测（15 分钟） | `networkConnections=5` 稳定；`established` 对端带真实 UA：`/PyBitmessage:0.6.3.2/` ×3、`/PyBitmessage:0.6.3.2/`、`/MiNode:0.3.3/`；`INVTHREAD sending` **14** 次、`recv inv` 17 次、`numberOfMessagesProcessed` 递增 | **≥10 分钟稳定 + inv 双向**，满足 M4.8.9 验收 |
+
+**所以两条"症状"的最终归因**：
+
+1. **"连接数秒被断"** → 本机（无 TLS 证书）连公网被 RST（§1.52 线缆证据）；平板上**不存在**该现象，
+   连接可稳定 15+ 分钟。**结论：本机环境限制，非产品缺陷。**
+2. **"inv 从不发出"** → 平板上其实是 **knownnodes 全死**导致无连接可发。换上活节点后
+   `INVTHREAD sending` 与 `recv inv` 都正常。**结论：数据/配置问题，非代码缺陷。**
+
+**顺带发现（未修，低优先级）**：日志有 `INVTHREAD skip stream 1 not in [0]` —— 少量连接
+`self.streams` 仍是默认 `[0]`（version 尚未解析完），这些连接会被跳过。属正常跳过，
+但如果长期不更新会影响对象分发效率，记入待观察。
+
+**平板当前状态（可回滚）**
+
+```
+包      : m489 + 2 处热补丁（files/app/android_notify.py）
+配置变更: keys.dat 加 apienabled=true/u/p；knownnodes.dat 换成 4 个活节点
+备份    : /tmp/bk_m489/{keys,messages,knownnodes}.dat（原始）
+连接    : 5 条 established（真实公网节点）
+收件箱  : 13 条（含 3 条本轮自发通知验证消息）
+```
+
+### 1.53 ⚠️ 更正 + M4.8.9 真因定位（2026-11-24 11:20）
+
+> **本节先自我更正上一版 1.53 的两条错误结论**（原文已删，错误保留在此以便追溯）：
+>
+> | 上一版的错误说法 | 实测 | 真相 |
+> |---|---|---|
+> | "`CreatePacket` 命令字段未补齐到 12 字节，`verack` 少 2 字节导致对端 RST" | `struct.Struct('!L12sL4s').pack(1, b'verack', 0, b'aaaa')` → `b'verack\x00\x00\x00\x00\x00\x00'`；修复前后 `verack` 字节**完全相同** | **`struct` 对 bytes 也会补齐**，这个"修复"是 **no-op**。当时我看到了"新旧字节相同"却错误地解释成"空载荷特例碰巧正确" |
+> | "`assembleAddrMessage` 等返回裸头而非完整包" | 源码一直是 `retval += CreatePacket(b'addr', payload)`；线缆抓包也是 63B 完整包 | **本来就是对**，这条结论纯属误判 |
+>
+> 教训：**先验证前提再改代码**。`tests/test_packet_framing.py` 保留下来作为格式回归测试（7 条），
+> 但它保护的是"本来就对"的行为，不能算 M4.8.9 的修复。
+
+**M4.8.9 真因（平板实测，2026-11-24 11:12–11:20）**
+
+| 步骤 | 观察 | 结论 |
+|---|---|---|
+| 装 m489 启动（沿用平板旧 `knownnodes.dat`） | `clientStatus.networkConnections=0`、`networkStatus=notConnected`；`listConnections` 有 **10 条 outbound，全部 `fullyEstablished=false`**、`userAgent=''` | 连接**发起了但握手从不完成** |
+| 逐对端查日志 | 那 10 个对端**一条 `BMPROTO` 日志都没有**；只有 `bootstrap8080.bitmessage.org` 有 version/verack | 对端已死，根本没回包（不是我们不发 inv） |
+| 把 `knownnodes.dat` 换成 4 个**活节点**（rating=1）后重启 | `networkConnections=6`、`numberOfMessagesProcessed=297`、日志出现 `TCP established` 6 次、`recv inv` 12 次 | **全链路正常** |
+
+**所以 M4.8.9 的"公网连接数秒被断 / inv 不发"是两个独立问题，都不是协议代码 bug**：
+
+1. **连接数秒被断** → 本机（无 TLS 证书）连公网节点会被 RST（EVIDENCE §1.52 的线缆证据）；
+2. **inv 不发** → 平板 `knownnodes.dat` 里全是 11-20 留下的**死节点**，一条都连不上，
+   自然没有 `inv`。换上活节点后 `inv` 立刻正常收发。
+
+**副产品：平板当前配置变更（可回滚）**
+
+```
+keys.dat      : 加 apienabled=true / apiusername=u / apipassword=p  （为了用 API 观测）
+knownnodes.dat: 替换为 4 个活节点；原文件备份在 /tmp/bk_m489/knownnodes.dat
+私钥/消息库   : 未改动（keys.dat 1862B、messages.dat 11.1MB，与本轮装机前一致）
+```
+
+**新增（本轮）**：`tests/test_packet_framing.py`（7 条格式回归）；
+`android_notify.py` 的权限申请改用 p4a 的 `android.permissions` 助手
+（原手写 jnius 数组创建在设备上抛 `JavaException('No constructor available')`，
+热补丁后日志为 `NOTIFY: POST_NOTIFICATIONS requested`）。
 
 ### 1.52 ◐◐ 本机公网联调：M4.8.3 已修，顺手挖出 1 个致命缺陷（2026-11-24 09:55）
 

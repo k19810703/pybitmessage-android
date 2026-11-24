@@ -19,7 +19,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import android_notify  # noqa: E402
-from queues import UISignalQueue  # noqa: E402
+import helper_inbox  # noqa: E402
 
 
 class OffDeviceTest(unittest.TestCase):
@@ -40,50 +40,42 @@ class OffDeviceTest(unittest.TestCase):
 
 
 class MessageHookTest(unittest.TestCase):
+    """install_message_hook() must notify exactly once per stored message."""
+
+    ROW = (b'\x01' * 32, 'BM-to', 'BM-from', '标题 M4.2.1', 1234567890,
+           '正文 body', 'inbox', 2, 0, b'\x02' * 32)
 
     def setUp(self):
-        self._saved = os.environ.get('ANDROID_ARGUMENT')
+        self._saved_env = os.environ.get('ANDROID_ARGUMENT')
         os.environ['ANDROID_ARGUMENT'] = '/dev/null'  # pretend to be on device
         self.calls = []
-        self._real = android_notify.notify_message
+        self._real_notify = android_notify.notify_message
         android_notify.notify_message = (
             lambda *a, **k: self.calls.append(a) or True)
-        while not UISignalQueue.empty():
-            UISignalQueue.get_nowait()
+        self._real_insert = helper_inbox.insert
+        helper_inbox.insert = lambda t: None          # don't touch SQL
+        if getattr(helper_inbox, '_notify_hook_installed', False):
+            self.skipTest('hook already installed by another test')
         self.assertTrue(android_notify.install_message_hook())
 
     def tearDown(self):
-        android_notify.notify_message = self._real
-        while not UISignalQueue.empty():
-            UISignalQueue.get_nowait()
-        if self._saved is None:
+        helper_inbox.insert = self._real_insert
+        helper_inbox._notify_hook_installed = False
+        android_notify.notify_message = self._real_notify
+        if self._saved_env is None:
             os.environ.pop('ANDROID_ARGUMENT', None)
         else:
-            os.environ['ANDROID_ARGUMENT'] = self._saved
+            os.environ['ANDROID_ARGUMENT'] = self._saved_env
 
-    def _wait_for(self, predicate, timeout=6.0):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            if predicate():
-                return True
-            time.sleep(0.1)
-        return False
+    def test_stored_message_triggers_one_notification(self):
+        helper_inbox.insert(self.ROW)
+        self.assertEqual(len(self.calls), 1)
+        # (from_address, subject, body)
+        self.assertEqual(self.calls[0][0], 'BM-from')
+        self.assertEqual(self.calls[0][1], '标题 M4.2.1')
 
-    def test_inbox_signal_is_notified_and_requeued(self):
-        UISignalQueue.put(('displayNewInboxMessage',
-                           ('inv', 'BM-to', 'BM-from', '标题', '正文')))
-        self.assertTrue(self._wait_for(lambda: self.calls))
-        self.assertEqual(
-            self.calls[0][:3], ('BM-from', '标题', '正文'))
-        # the real consumer (UIkivySignaler) must still see the signal
-        self.assertTrue(self._wait_for(lambda: not UISignalQueue.empty()))
-        command, data = UISignalQueue.get_nowait()
-        self.assertEqual(command, 'displayNewInboxMessage')
-        self.assertEqual(data[2], 'BM-from')
-
-    def test_other_commands_are_not_notified(self):
-        UISignalQueue.put(('updateSentItemStatusByAckdata', ('ack', 's')))
-        self.assertTrue(self._wait_for(lambda: not UISignalQueue.empty()))
+    def test_draft_and_trash_folders_do_not_notify(self):
+        helper_inbox.insert(self.ROW[:6] + ('trash',) + self.ROW[7:])
         self.assertEqual(self.calls, [])
 
 

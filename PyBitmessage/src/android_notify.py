@@ -9,14 +9,12 @@ Two separate jobs, both no-ops off-device:
    the new-message note would ever appear. Decline must not crash the app --
    the node keeps running, it just cannot show anything.
 
-2. **New message notification**. The core already emits
-   ``displayNewInboxMessage`` on ``queues.UISignalQueue`` for every message
-   that is stored in the inbox (class_objectProcessor.processmsg), but only
-   the PyQt UI consumed it -- on Kivy the queue item was simply thrown
-   away. ``install_message_hook()`` peeks into the same queue from a small
-   daemon thread and posts a notification. It *peeks* (``get_nowait`` then
-   ``put`` back) instead of consuming, because ``UIkivySignaler`` owns the
-   consumer side of that queue.
+2. **New message notification**. ``install_message_hook()`` wraps
+   ``helper_inbox.insert`` -- the single point where the core stores an
+   accepted message -- and posts a notification for each one. An earlier
+   version peeked at ``queues.UISignalQueue`` instead, which does not work:
+   that queue has an owner (``bitmessagekivy.uikivysignaler``) that usually
+   consumes the signal before the hook ever sees it.
 
 Accepted trade-off: while the notification shade is expanded the OS also
 shows the subject on the lock screen. The subject is the first line of the
@@ -26,8 +24,6 @@ body is never put in a notification. Pass ``privacy=True`` to
 """
 
 import os
-import threading
-import time
 
 CHANNEL_ID = 'pybitmessage_messages'
 CHANNEL_NAME = '新消息'
@@ -35,7 +31,6 @@ MESSAGE_ID_BASE = 2000
 REQUEST_CODE_PERMISSION = 0x424D  # arbitrary but stable ("BM")
 
 _permission_asked = False
-_hook_thread = None
 
 
 def _android_context():
@@ -109,14 +104,27 @@ def request_permission_once():
             print('NOTIFY: POST_NOTIFICATIONS already granted', flush=True)
             _permission_asked = True
             return False
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        activity = PythonActivity.mActivity
-        java_str = autoclass('java.lang.String')
-        String = autoclass('[Ljava.lang.String;')
-        perms = String(1)
-        perms[0] = java_str('android.permission.POST_NOTIFICATIONS')
         _permission_asked = True
-        activity.requestPermissions(perms, REQUEST_CODE_PERMISSION)
+        # python-for-android ships a battle-tested wrapper; building the
+        # String[] by hand with autoclass raised "No constructor available"
+        # on the device (M4.2.1 verification, 2026-11-24).
+        try:
+            from android.permissions import (  # noqa: PLC0415
+                request_permissions, Permission)
+        except ImportError:
+            request_permissions = None
+        permission = 'android.permission.POST_NOTIFICATIONS'
+        if request_permissions is not None:
+            request_permissions([getattr(
+                Permission, 'POST_NOTIFICATIONS', permission)])
+        else:
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            activity = PythonActivity.mActivity
+            String = autoclass('java.lang.String')
+            array_cls = autoclass('[Ljava.lang.String;')
+            perms = array_cls(1)
+            perms[0] = String('android.permission.POST_NOTIFICATIONS')
+            activity.requestPermissions(perms, REQUEST_CODE_PERMISSION)
         print('NOTIFY: POST_NOTIFICATIONS requested', flush=True)
         return True
     except Exception as exc:  # noqa: BLE001 - never block startup
@@ -202,8 +210,9 @@ def notify_message(from_address, subject, body='', privacy=False):
         builder.setOnlyAlertOnce(False)
         if sdk >= 26:
             builder.setCategory(java_str('msg'))
-            if sdk >= 31:
-                builder.setShortCriticalText(java_str(text))
+            # Do NOT call setShortCriticalText(): it only exists from API 36
+            # (Android 16) and raised AttributeError on the Android 13 tablet,
+            # which silently killed the whole notification (M4.2.1, 2026-11-24).
         else:
             builder.setDefaults(
                 autoclass('android.app.Notification').DEFAULT_ALL)
@@ -238,42 +247,45 @@ def notify_message(from_address, subject, body='', privacy=False):
 # 3. bridge to the core's UISignalQueue
 # --------------------------------------------------------------------------
 
-def _hook_loop():
-    import queue as _queue
+def _hook_inbox_insert():
+    """Wrap ``helper_inbox.insert`` so every stored message notifies.
 
-    from queues import UISignalQueue  # noqa: PLC0415
+    ``class_objectProcessor.processmsg`` calls ``helper_inbox.insert(t)``
+    exactly once per message that passes decryption, signature and PoW
+    checks, with
+    ``t = (inventoryHash, toAddress, fromAddress, subject, received, body,
+    folder, encodingType, read, sigHash)``. Hooking the insert means the
+    notification cannot be lost to a queue race and the core file stays
+    untouched (the module object is shared because ``main.alias_core_modules``
+    binds ``pybitmessage.helper_inbox`` to this one).
+    """
+    try:
+        import helper_inbox  # noqa: PLC0415
+    except ImportError as exc:
+        print('NOTIFY: cannot hook inbox: %r' % (exc,), flush=True)
+        return False
+    if getattr(helper_inbox, '_notify_hook_installed', False):
+        return True
+    original = helper_inbox.insert
 
-    while True:
+    def insert(t):
+        original(t)
         try:
-            item = UISignalQueue.get_nowait()
-        except _queue.Empty:
-            time.sleep(2.0)
-            continue
-        except Exception:  # noqa: BLE001
-            time.sleep(5.0)
-            continue
-        try:
-            UISignalQueue.put(item)  # hand it back to the real consumer
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            command, data = item
-            if command == 'displayNewInboxMessage' and len(data) >= 5:
-                _inv, _to, from_address, subject, body = data[:5]
-                notify_message(from_address, subject, body)
-        except Exception as exc:  # noqa: BLE001
+            # t[2] = fromAddress, t[3] = subject, t[6] = folder
+            if len(t) >= 7 and t[6] != 'inbox':
+                return
+            notify_message(t[2], t[3], t[5] if len(t) > 5 else '')
+        except Exception as exc:  # noqa: BLE001 - never break the insert
             print('NOTIFY: hook failed: %r' % (exc,), flush=True)
+
+    helper_inbox.insert = insert
+    helper_inbox._notify_hook_installed = True
+    print('NOTIFY: inbox insert hook installed', flush=True)
+    return True
 
 
 def install_message_hook():
     """Start the daemon thread that turns inbox signals into notifications."""
-    global _hook_thread
     if os.environ.get('ANDROID_ARGUMENT') is None:
         return False
-    if _hook_thread is not None and _hook_thread.is_alive():
-        return True
-    _hook_thread = threading.Thread(
-        target=_hook_loop, name='notify-hook', daemon=True)
-    _hook_thread.start()
-    print('NOTIFY: message hook started', flush=True)
-    return True
+    return _hook_inbox_insert()

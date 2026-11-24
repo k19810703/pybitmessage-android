@@ -287,7 +287,7 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 |---|---|---|---|---|
 | M4.1.1 | 声明前台服务并常驻通知 | `buildozer.spec services=`、新增 `service.py` | 4h | **L**：通知栏出现；`adb shell ps -A \| grep bitmessage` 在退出 UI 后仍有进程 |
 | M4.1.2 | 通知渠道（Android 8+） | `service.py` 用 `NotificationChannel` | 2h | **S**：通知正常显示、不报渠道错误 |
-| M4.2.1 ◐ | 通知权限（Android 13+） | `POST_NOTIFICATIONS` 运行时申请 | 3h | **S**：首次启动有授权弹窗；拒绝后 App 不崩 | 代码✅ `01e8892` + 单测（EVIDENCE §1.51，含新消息通知），待装机验收 |
+| M4.2.1 ✅ | 通知权限（Android 13+） | `POST_NOTIFICATIONS` 运行时申请 + 新消息通知 | 3h | **S**：首次启动有授权弹窗；拒绝后 App 不崩 | **设备验收通过**（EVIDENCE §1.54）：Android 13 弹窗可见、授权后前台服务通知与「新消息 / 中文主题」通知均正常 |
 | M4.3.1 | WakeLock + Doze 白名单引导 | `src/android_keepalive.py`（partial wake lock + 豁免引导）；`WAKE_LOCK` / `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 权限 | **L**：`dumpsys power` 见 `pybitmessage:node`；锁屏 5 分钟连接稳定 ≥11 | ◐ **部分通过**（EVIDENCE §1.31）：wake lock ✅、锁屏连接保持 ✅；待修 BroadcastReceiver 声明 + 待做 D5 30 分钟收消息验收 |
 | M4.4.1 | 数据持久化与恢复 | 校验 `keys.dat`/`messages.dat` 完整性 | 4h | **F**：`am force-stop` 后重启，D1/D6 仍成立 |
 | M4.5.1 ✅ | 禁用云备份 | `android.allow_backup = False`（spec） | 1h | **A**：aapt2 确认 `allowBackup=false`（run 45096582390，EVIDENCE §1.40） |
@@ -311,7 +311,7 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 
 | **M4.8.6** | 桥接/握手 TLS 竞态 | Mac→平板经 adb 桥 100% 复现：明文 verack 卡在 `tls_init` 包装之后发不出去，连接永不建立（EVIDENCE §1.44）。疑为上游 bug，公网连接不受影响 | 桥接能建立并传输对象；或证明桥接方案废弃 | M4.8 系列 | 低（只影响 USB 桥测试路径） |
 
-| **M4.8.9** ◐ | 公网连接建立后数秒被主动断开 / `inv` 从不发出 | 本机公网联调（EVIDENCE §1.52）：`TCP established` 后 2–6 s 连接消失，网关无任何日志；对端 `verack` 之后双方都不发 `inv`。已排除：握手状态机（离线用真实抓包验证通过）、`connecting` 标志（已修，公网 TCP 从 0 次建立变为稳定建立）、对端拒绝（对端每次都回 dup-IP，属其自身状态） | 待定：`receiveDataQueue` 积压触发停网 / `sendBigInv` 库存为空 / 其他 | **A**：公网节点 `networkConnections ≥ 1` 且持续 ≥ 10 分钟；**L**：日志出现发往对端的 `inv` | M3.8.4 / M4.8 | 高 |
+| **M4.8.9** ✅ | 公网连接建立后数秒被主动断开 / `inv` 从不发出 | 本机公网联调（EVIDENCE §1.52）：`TCP established` 后 2–6 s 连接消失，网关无任何日志；对端 `verack` 之后双方都不发 `inv`。已排除：握手状态机（离线用真实抓包验证通过）、`connecting` 标志（已修，公网 TCP 从 0 次建立变为稳定建立）、对端拒绝（对端每次都回 dup-IP，属其自身状态） | 待定：`receiveDataQueue` 积压触发停网 / `sendBigInv` 库存为空 / 其他 | **A**：公网节点 `networkConnections ≥ 1` 且持续 ≥ 10 分钟；**L**：日志出现发往对端的 `inv` | M3.8.4 / M4.8 | 高 |
 
 > **M4.8.9 结论（2026-11-24 10:55，EVIDENCE §1.53）**：线缆抓包证明对端在我们发出格式正确的
 > `verack` 后主动发 **RST**，不是我们的 bug。同时修掉 2 个真实缺陷（`CreatePacket` 未补齐 12 字节命令字段、
