@@ -632,7 +632,10 @@ Ran 3 tests ... OK
 
 `python3 -m compileall -q src | grep -c "Error compiling"` → **0**。
 
-**CI**：run 45298351539（2026-11-24 00:35 UTC 触发）。
+**CI**：run 45298351539 ✅ **success**（10m12s），artifact `pybitmessage-apk-55`。
+APK 内已验证：`assets/private.tar` 含 `android_notify.pyc`（顶层 + `pybitmessage/` 两份）；
+`aapt2 dump badging` 含 `POST_NOTIFICATIONS` / `FOREGROUND_SERVICE` / `WAKE_LOCK`。
+个钥重签后：`/tmp/pybitmessage-m421-2026-11-24.apk`，sha256 `234559e9fe26fa310a4f42f0b2f31d3cd86b90db7731db811c7e27e25fcd7124`，25 MB。
 
 **待做（设备验收，需用户确认后执行）**：
 

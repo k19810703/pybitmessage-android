@@ -286,7 +286,8 @@ cd /tmp && (BITMESSAGE_LOG_LEVEL=INFO python3 -u /tmp/run_node.py > /tmp/node1.o
 ## 6.0c 🔜 待装机验收：M4.2.1 通知权限 + 新消息通知（2026-11-24 08:45）
 
 **代码**：`src/android_notify.py`（新增）+ `src/main.py` 挂接，commit `01e8892`。
-**包**：CI run 45298351539 的 `pybitmessage-apk-<N>`，需 `scripts/resign-apk.sh` 个钥重签后覆盖安装。
+**包**：`/tmp/pybitmessage-m421-2026-11-24.apk`（run 45298351539 artifact `pybitmessage-apk-55`，
+已用 `scripts/resign-apk.sh` 个钥重签，sha256 `234559e9...cd7124`，可直接覆盖安装）。
 **前置**：设备 USB 连上（`adb devices` 应见 `b45f8e87`）。装包前先备份 keys/messages。
 
 **验收步骤**（S 类，每步截图）：
