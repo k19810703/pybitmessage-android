@@ -1,7 +1,7 @@
 # 安装与升级（侧载）
 
-> 面向拿到 `pybitmessage-*.apk` 的人。命令以 macOS + adb 为例，包名
-> `at.bitmessage.pybitmessage`。
+> **本文只讲安装与升级。** 首次配置、互换地址、故障排查请看 `README-ANDROID.md`。
+> 命令以 macOS + adb 为例，包名 `at.bitmessage.pybitmessage`。
 
 ## 1. 首次安装
 
@@ -46,28 +46,24 @@ adb install pybitmessage-0.1.2-arm64-v8a-debug.apk
 > 注意：卸载会连 `keys.dat` 一起删掉，**地址和私钥就没了**。要保留身份，先用
 > `adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.dat > keys.dat.bak` 备份。
 
-## 3. PoW 难度（extralowdifficulty）
+## 3. PoW 难度
 
-设备上没有 C 版 PoW，默认难度下一条消息要 ~10 分钟。因此：
+> **2026-11-19 之后已不需要低难度。** 设备上有 C 版 PoW 加速库（`libbitmsghash.so`），
+> 协议默认难度下**每个对象约 4 秒**（平板实测，见 `EVIDENCE.md` §1.22）。
+>
+> 早期构建曾默认打开 `extralowdifficulty`；现在**默认关闭**，因为公网节点会按协议要求
+> 钳制难度，低难度对象会被丢弃（`insufficient PoW`）。启动日志会提示
+> `POW: extralowdifficulty is on; messages may be dropped by public peers` —— 看到它说明
+> 你的 `keys.dat` 里还留着旧值，应删掉。
 
-- **从 2026-11-18 之后的构建开始，APK 首次启动会自动写入
-  `extralowdifficulty = true`**，不需要手动操作
-  （logcat 里能看到 `POW: defaulting to extralowdifficulty on Android`）。
-- 想手动开关（debug 包 + adb 才可行）：
+检查当前值：
 
-  ```bash
-  ./scripts/enable-low-pow.sh          # 打开并重启
-  ./scripts/enable-low-pow.sh off      # 关闭
-  ```
+```bash
+adb shell run-as at.bitmessage.pybitmessage grep extralowdifficulty files/bitmessage/keys.dat
+# 无输出 = 使用协议默认难度（正确状态）
+```
 
-- 它改的是 App 私有目录里的 `keys.dat`：
-
-  ```bash
-  adb shell run-as at.bitmessage.pybitmessage grep extralowdifficulty files/bitmessage/keys.dat
-  ```
-
-⚠️ **对端也要低难度**：PoW 目标由发送方声明、接收方校验，双方都开才稳定互通。
-两个都装本项目 APK 时，双方默认都开。
+如确认要手动开关（仅调试用）：`./scripts/enable-low-pow.sh [off]`。
 
 ## 4. 常见问题
 
@@ -75,5 +71,5 @@ adb install pybitmessage-0.1.2-arm64-v8a-debug.apk
 |---|---|---|
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 签名不同（本次构建 vs 已装） | 见 §2：重签或卸载 |
 | 启动后长时间白屏 | 首次解压运行时 | 等 60 秒 |
-| 发消息一直 `doingmsgpow` | 没有开低难度 | `./scripts/enable-low-pow.sh` |
-| 连不上任何节点 | 默认种子节点已下线 | 需要配置可用 `knownnodes`（见 AGENTS §6.6） |
+| 发消息一直 `doingmsgpow` | 正常，PoW 约 4 秒/对象；超过 1 分钟才异常 | 见 `README-ANDROID.md` §5.2 |
+| 连不上任何节点 | `knownnodes.dat` 里全是死节点 | 见 `README-ANDROID.md` §5.1 |
