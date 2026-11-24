@@ -305,11 +305,13 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 |---|---|---|---|---|---|---|
 | **M4.8.1** ◐ | `singleCleaner` 崩溃（py3 bytes/str） | 已修：6 处 str tag/buffer() 写入点 + flush() `_as_bytes()` 防御（commit `b9c9996`，单元验证通过，EVIDENCE §1.42） | **L**：1 小时无 THREAD-CRASH；**F**：knownnodes.dat mtime 更新 | M4.4 | 代码✅ 待装机实测 |
 | **M4.8.2** ◐ | `skipUntil` 反交集防御吞 getdata | 已修：窗口内只排队 `state.Inventory` 里实际持有的对象，未持有的照旧丢弃（commit `8664414`，单元验证通过，EVIDENCE §1.41） | **T**：新地址间送达时间 P95 ≤ 5 分钟 | M3.8.4 + M4.3 | 代码✅ 待装机实测 |
-| **M4.8.3** | SIGTERM 优雅关闭挂死 | 节点收到 SIGTERM 后 API 已死但进程与 `singleton.lock` 仍在，新实例报 "Another instance is already running" | 关闭流程加超时强制退出；启动时检测陈旧锁 | **F**：`kill` 后 10 秒内进程消失且锁文件被清理；新实例可正常启动 | M4.6（崩溃自恢复） | 中 |
+| **M4.8.3** ◐ | SIGTERM 优雅关闭挂死 | 本机复现（EVIDENCE §1.52）：当前代码 1–2 s 即退出，但 `singleton.lock` **残留**；`doCleanShutdown()` 里的 `join()` 无超时是潜在挂死点 | 已修（commit `5018bf4`）：`ShutdownWatchdog`+`forcedExit`（10 s 上限）、关闭重入保护、启动时清理未被持有的陈旧锁 | **F**：`kill` 后 10 秒内进程消失且锁文件被清理；新实例可正常启动 | M4.6（崩溃自恢复） | 中 |
 | **M4.8.4** | `networkConnections` 计数失真 | `clientStatus` 报 1，`lsof` 实际 5 条 ESTABLISHED | 核对计数来源（`connectionpool.outboundConnections` vs 实际 channel） | **A**：`clientStatus.networkConnections` 与 `netstat` 的 ESTABLISHED 数差 ≤ 1 | M3.8.4 | 低（不影响功能，影响诊断） |
 | **M4.8.5** | `doingmsgpow` 偶发卡 5 分钟 | 平板第 2 条消息 `doingmsgpow` 持续 5+ 分钟未推进（第 1 条正常，C PoW 单对象 ~4s） | 查 `class_singleWorker` 的队列/`sleeptill` 逻辑 | **T**：连续发 5 条，每条 `doingmsgpow` ≤ 30 秒 | M3.4 | 中 |
 
 | **M4.8.6** | 桥接/握手 TLS 竞态 | Mac→平板经 adb 桥 100% 复现：明文 verack 卡在 `tls_init` 包装之后发不出去，连接永不建立（EVIDENCE §1.44）。疑为上游 bug，公网连接不受影响 | 桥接能建立并传输对象；或证明桥接方案废弃 | M4.8 系列 | 低（只影响 USB 桥测试路径） |
+
+| **M4.8.9** 🚨 | 公网连接建立后数秒被主动断开 / `inv` 从不发出 | 本机公网联调（EVIDENCE §1.52）：`TCP established` 后 2–6 s 连接消失，网关无任何日志；对端 `verack` 之后双方都不发 `inv`。已排除：握手状态机（离线用真实抓包验证通过）、`connecting` 标志（已修，公网 TCP 从 0 次建立变为稳定建立）、对端拒绝（对端每次都回 dup-IP，属其自身状态） | 待定：`receiveDataQueue` 积压触发停网 / `sendBigInv` 库存为空 / 其他 | **A**：公网节点 `networkConnections ≥ 1` 且持续 ≥ 10 分钟；**L**：日志出现发往对端的 `inv` | M3.8.4 / M4.8 | 高 |
 
 **状态**：M4.8.1 ◐ 代码+设备验证（0 崩溃、flush 正常，EVIDENCE §1.43）；M4.8.2 ◐ 代码+单元验证，送达实测待平板回到可用网络；M4.8.3 建议随 M4.6 一起做；
 M4.8.2 建议在 M4.3（保活）验证同期处理，因为它与"消息能否到达"直接相关。

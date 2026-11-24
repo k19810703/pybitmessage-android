@@ -591,6 +591,77 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.52 ◐◐ 本机公网联调：M4.8.3 已修，顺手挖出 1 个致命缺陷（2026-11-24 09:55）
+
+**背景**：用户选择先做「不依赖设备的缺陷修复」。用 `scripts/pubnet_node.py`
+在本机起真节点连公网，边复现边验证。
+
+**M4.8.3（SIGTERM 关闭挂死）——已修，本机实测**
+
+| 假设 | 验证 | 结论 |
+|---|---|---|
+| 关闭流程本身会挂 | 对 `pubnet_node` 发 SIGTERM，进程 1–2 s 退出 | ❌ 当前代码**不挂** |
+| 但锁文件残留 | 退出后 `singleton.lock` 仍在（内容是被杀进程的 pid） | ✅ 属实：下游误判「Another instance is running」 |
+
+**根因（两段）**：
+1. `shutdown.doCleanShutdown()` 里的 `thread.join()` **没有超时**，任一线程卡在读 socket
+   就永久等待（外层还有 `while state.shutdown == 1: sleep` 无上限）——
+   8 月观察到的"僵尸进程占锁"就是这个；
+2. 进程退出后**没人删锁文件**（`atexit` 不跑，`os._exit` 直接跳）。
+
+**修复**（commit `5018bf4`）：
+
+- `shutdown.py`：新增 `ShutdownWatchdog`（默认 10 s）+ `forcedExit()`（join 全部带截止时间）；
+  `doCleanShutdown()` 加重入保护（第二个 SIGTERM 不再进清理流程，避免半拆状态下二次 flush）；
+  强制退出前 best-effort 存 knownnodes + 释放锁
+- `singleinstance.py`：启动时若锁文件**未被任何进程持有**（`flock` 探测）则删除并打印
+- 实测：带陈旧锁启动 → `Removed stale single instance lock` → 锁被重建；SIGTERM 后
+  `singleton.lock` **不再残留**
+- 单测 `tests/test_shutdown.py` 6 条全过（超时会强制退出 / 按时完成则不动 / 重入保护 / 陈旧锁清理）；
+  修过的两个自身 bug：`lockf()` 需要可写句柄（只读句柄 EBADF 被误当"被持有"）、
+  join 返回后线程尚未回收导致误判
+
+**顺带修的健壮性**（同 commit）：`connectionchooser.chooseConnection()` 先快照候选列表，
+候选为空时报 `ValueError` 而不是 `random.choice([])` 抛 `IndexError`；`connectionpool.loop()`
+捕获它——否则**空 knownnodes（首次启动、bootstrap 前）会让 Asyncore 线程直接死掉**，
+之后整个进程没有任何网络（本 session 实测复发过一次）。
+
+**修 tcp 新连接 `connecting` 标志**（同 commit，M4.8.5 疑似根因之一）：
+`TLSDispatcher.__init__` → `create_socket()` → `set_socket()` 重建了 socket，`connecting`
+永远是默认 `False`，SYN-ACK 到达时 `handle_connect_event()` 不跑 → `connected=False` →
+`readable()` 恒 `False` → **新拨出的 TCP 连接一个字节都读不到**。一上线就"成功"只是因为
+loopback 的建立比事件循环第一次 poll 还快，靠 `select` 把 socket 报成 writable 才走到
+`handle_write_event`。修复后**公网 TCP 稳定建立**（修复前同网络下 0 次，修复后
+`TCP established: 185.158.248.216:8444 outbound=True`，`networkConnections=1`）。
+
+**🚨 尚未修复的致命问题（M4.8.9 候选）**：公网连接建立后 **2–6 秒被主动断开**，且网关不发任何
+跟踪日志。已排除：
+
+| 怀疑 | 证据 | 结论 |
+|---|---|---|
+| TCP 层被网关"超时回收" | `scripts/pubnet_diag.py`（120 s 窗口）：4 节点各连一次 → 9 次 `Too many connections`
+拒绝、1 次建立；此后**没再向对端发任何东西**，连接仍在 `clientStatus` 里 | 不能解释断开 |
+| 对端拒绝（dup-IP / 时间偏差） | 对端对**每次**新连接都回 `Too many connections from your IP`；
+`timeOffset` −1～−6 s 正常 | 对端自己的状态，不是我们被二次断开的原因 |
+| `receiveDataQueue` 被塞满触发停网 | 每个连接建立都 `put`，只显式 `get` 一次，队列上限 1000 | 待验证 |
+| **`inv` 从不发给公网对端** | 对端回了 `verack`，我们回了 `verack`（87 B）后 8 s 内两侧都没有 `inv/getdata` 日志 | 待验证 |
+
+**已排除的排查陷阱（写给下一个 session）**
+
+1. **匿名管道里的 print 是块缓冲**：`subprocess.stdout` 不是 TTY 时，`print(flush=True)` 只把数据
+   推进 Python 的 `TextIOWrapper`，进程被杀时整块丢失。用 `python3 -u`。
+   本 session 因此误判了两次「打点没触发」。
+2. **写死的 8444 是共享资源**：`pubnet_node` 固定监听 8444，任何残留节点都会抢占它；
+   现象是「端口的监听者 ≠ 你以为是的那台」。排查前先 `lsof -nP -iTCP:8444 -sTCP:LISTEN`。
+3. **`pubnet_node.py` 默认 4 个公网对端**，`--peer` 只替换第一条；想只连一台必须用
+   `--reset-peers --peer <host:port>`，否则会被「Too many connections from your IP」淹没。
+
+**新增诊断脚本（全部只读，不参与出包）**：`scripts/hs_trace.py`（逐包握手）、
+`scripts/handshake_probe.py`（用真实抓包 `tests/fixtures/handshake/` 离线跑状态机，
+证明握手状态机本身没问题）、`scripts/pipeline_trace.py`（inv→getdata 链路）、
+`scripts/pubnet_diag.py`（公网连通性与拒绝率）、`scripts/close_trace.py`（连接关闭归因）、
+`scripts/which_module.py`（模块真实来源，防"文件写了却没生效"）。
+
 ### 1.51 ◐ M4.2.1：通知权限 + 新消息通知（代码完成，待装机）（2026-11-24 08:40）
 
 **任务缺口调研（先读代码再动手）**：
