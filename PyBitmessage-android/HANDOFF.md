@@ -317,6 +317,51 @@ App 不崩、收发照常，只是没有通知——**这是通过标准之一�
 
 ---
 
+## 6.0g ⏸ 2026-11-24 17:15：暂停点（等设备就绪后从这里继续）
+
+### 一句话状态
+
+M5 只剩 **M5.4.1 回归**没跑完。D1/D2 已通过（并顺带修掉一个 API 的真实 py3 bug），
+D3/D4 被**本机出口 IP 拿不到公网连接**卡住（`Too many connections from your IP`），
+D6/D7 因设备中途断开未执行。
+
+### 平板当前状态
+
+```
+包      : 0.6.3.2（图标 + 启动图 + 私钥加密 + 通知 都在里面）
+热补丁  : files/app/api.py  ← 唯一一处，是 1.58 里的 API 修复
+          重新装包会丢，需要「先出包再装」才能固化
+地址    : BM-2cXrmLDcoGry6Z4kRWqCthD7kuhRxkzaWx（phone）
+          BM-2cWGibweLdxrUHN2JaLhGiBtekxZAw2ufV（HD）
+收件箱  : 14 条
+备份    : /tmp/bk_splash/{keys.dat,keys.vault,messages.dat}
+```
+
+### 下次继续时的步骤
+
+1. **先出包固化 API 修复**（`api.py` 已提交在 `c827a03`，直接 push 触发 CI 即可），
+   再装到平板 → 零热补丁
+2. 设备在前台、网络能联通公网节点后，跑完整回归：
+
+   ```bash
+   adb -s b45f8e87 forward tcp:8445 tcp:8442
+   python3 scripts/regression-d1-d7.py --json /tmp/d1d7.json --markdown /tmp/d1d7.md
+   ```
+
+   脚本会自动起 Mac 节点（A）、必要时给它 `createRandomAddress`、等它真正上线，
+   再跑 D3/D4/D6/D7；等不到连接就把 D3–D7 标 `BLOCKED` 并写明原因。
+3. **如果 A 仍然连不上**（同一个出口 IP 问题）：换把手机热点给 Mac 用（换公网出口），
+   或用第二台真实设备当 A——D3/D4 必须两台不同设备才有意义
+4. D5（锁屏 30 分钟）按用户要求最后做
+
+### 顺带待办
+
+- 发布页 `v0.6.3.2` 的资产是**修复 API 之前**的包；重出包后需要替换资产并更新
+  `SHA256SUMS`、`RELEASE.md` 里的 sha
+- p4a 产出的是 `res/drawable/presplash.jpg`（JPEG，有轻微色带），可接受但非无损
+
+---
+
 ## 6.0f ✅ 2026-11-24 11:50：M4.2.1 设备验收通过、M4.8.9 关闭（新 session 从这里开始）
 
 ### 平板当前状态（干净，零热补丁）

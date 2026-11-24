@@ -591,6 +591,54 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.58 ◐ M5.1.1 启动图 + M5.4.1 首轮回归（2026-11-24 17:10，暂停于此）
+
+**启动图（用户反馈"启动有个 logo 没改、黑底不好看"）**
+
+原来 p4a 用的是 **Kivy 自带的白风筝 "Loading..." 黑底图**，而且和我们的
+`android.presplash_color = #091220` 拼在一起有明显接缝。
+
+现在 `scripts/make-icon.py --only presplash` 生成 `src/images/presplash.png`
+（1024×1024）：原图整幅（保留背景走线）+ 提亮 + 泛光 + 最外圈径向淡出到纯深蓝 +
+底部 `PyBitmessage` 字标；spec 里 `presplash.filename` 指向它。
+
+截图证据：`artifacts/m511-splash-new.png`（旧：`artifacts/m511-splash-old-kivy.png`）。
+
+**踩坑（同一类错误犯了两次）**：先用 `ImageDraw.ellipse` 画环造径向渐变 → 蒙版全 0（`ellipse`
+填满整圆，后画的大圆覆盖中心）；第二版把 emblem 当作矩形 paste 上去 → 四边有硬接缝；
+最后改成"整幅铺满 + 径向淡出"才干净。脚本里已写明这个陷阱。
+
+**M5.4.1 首轮回归结果（`scripts/regression-d1-d7.py`）**
+
+| # | 结果 | 说明 |
+|---|---|---|
+| D1 | ✅ | A=`BM-2cU7wbs…`（Mac 节点，脚本自动 `createRandomAddress`）B=`BM-2cXrm…`（平板） |
+| D2 | ✅ | B 的通讯录出现 A（1 条）——**并因此暴露了一个真实 py3 bug** |
+| D3 | ❌ | B→A 480s 未到达 |
+| D4 | ❌ | A→B 480s 未到达 |
+| D5 | ⏭ | 按用户要求显式跳过 |
+| D6/D7 | 未执行 | 进程在 D5 后被中断（设备随后断开） |
+
+**D2 顺带修掉的真 bug（commit `c827a03`）**：`api.py` 的 `listAddressBookEntries` 在通讯录
+**非空**时必崩——`shared.fixPotentiallyInvalidUTF8Data()` 对 str 输入返回 str，
+`base64.b64encode()` 需要 bytes → `TypeError: a bytes-like object is required`。
+同一模式还存在于 `listSubscriptions`、`listBlacklist/listWhitelist`、`listAddresses2`
+（后者的 label 直接来自 config，本来就是 str）。四处统一用已有的 `_as_bytes()`。
+之前没人发现，是因为地址簿一直是空的，循环体从不执行。
+
+**D3/D4 失败的实际原因（环境，非产品）**：A（Mac 节点）在整个窗口内
+**`networkConnections` 一直是 0**，日志全是
+`error: 2, Too many connections from your IP. Closing connection.`
+——本机出口 IP 被公网节点按"同 IP 连接数超限"拒绝（R7/M3.8.2 的已知问题）。
+一个连不上网络的节点既不能广播自己的 pubkey，也收不到任何东西，所以双向收发根本无从发生。
+
+**为此改进了脚本**：新增 `wait_for_connections()`，在 D3 之前先等 A 真正上线；
+等不到就把 D3–D7 标为新增的 **`BLOCKED`** 状态（既不算通过、也不算产品失败），
+并写明原因。`--connect-timeout` 可调（默认 420s）。
+
+**⚠️ 平板当前状态**：装着 `0.6.3.2` 包 + **一处热补丁**（`files/app/api.py`，就是上面
+那个 API 修复）。下次装新包前需要重新出包才能固化；直接重装会丢掉这个热补丁。
+
 ### 1.57 ◐ M5.2.1 统一签名 + M5.4.2 发布 + M5.4.1 回归脚本（2026-11-24 15:50）
 
 **M5.2.1 统一签名**
