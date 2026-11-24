@@ -270,6 +270,15 @@ def main():
         print('POW: extralowdifficulty is on; messages may be dropped by '
               'public peers', flush=True)
 
+    # M4.5.2: report which vault protects keys.dat, so the device log alone
+    # answers "is the private key encrypted, and by what?".
+    try:
+        import keystore
+        print('KEYSTORE enabled=%s backend=%s' % (
+            keystore.enabled(), keystore.backend()), flush=True)
+    except Exception as exc:  # noqa: BLE001 - never block startup
+        print('KEYSTORE probe failed: %r' % (exc,), flush=True)
+
     alias_core_modules()
     schedule_android_keepalive()
     bitmessagemain.main()

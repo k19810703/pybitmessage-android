@@ -105,26 +105,21 @@ def request_permission_once():
             _permission_asked = True
             return False
         _permission_asked = True
-        # python-for-android ships a battle-tested wrapper; building the
-        # String[] by hand with autoclass raised "No constructor available"
-        # on the device (M4.2.1 verification, 2026-11-24).
+        permission = 'android.permission.POST_NOTIFICATIONS'
+        # python-for-android ships a tested wrapper for this. Building the
+        # String[] by hand failed twice on the device: autoclass() on an array
+        # class raises "No constructor available", and passing an illegal JNI
+        # name ('java.lang.String[]') makes ART abort the process outright.
+        # Never construct Java arrays here.
         try:
             from android.permissions import (  # noqa: PLC0415
                 request_permissions, Permission)
         except ImportError:
-            request_permissions = None
-        permission = 'android.permission.POST_NOTIFICATIONS'
-        if request_permissions is not None:
-            request_permissions([getattr(
-                Permission, 'POST_NOTIFICATIONS', permission)])
-        else:
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            activity = PythonActivity.mActivity
-            String = autoclass('java.lang.String')
-            array_cls = autoclass('[Ljava.lang.String;')
-            perms = array_cls(1)
-            perms[0] = String('android.permission.POST_NOTIFICATIONS')
-            activity.requestPermissions(perms, REQUEST_CODE_PERMISSION)
+            print('NOTIFY: android.permissions missing; cannot request',
+                  flush=True)
+            return False
+        request_permissions([getattr(
+            Permission, 'POST_NOTIFICATIONS', permission)])
         print('NOTIFY: POST_NOTIFICATIONS requested', flush=True)
         return True
     except Exception as exc:  # noqa: BLE001 - never block startup

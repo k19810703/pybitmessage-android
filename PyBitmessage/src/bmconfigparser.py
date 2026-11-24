@@ -2,10 +2,13 @@
 BMConfigParser class definition and default configuration settings
 """
 
+import io
 import os
 import shutil
 from datetime import datetime
 from threading import Event
+
+import keystore
 
 from six import string_types
 from six.moves import configparser
@@ -107,8 +110,56 @@ class BMConfigParser(SafeConfigParser):
         self._reset()
         SafeConfigParser.read(
             self, os.path.join(os.path.dirname(__file__), 'default.ini'))
-        if filenames:
-            SafeConfigParser.read(self, filenames)
+        if not filenames:
+            return
+        if isinstance(filenames, string_types):
+            filenames = [filenames]
+        for filename in filenames:
+            self._read_config_file(filename)
+
+    def _read_config_file(self, filename):
+        """Read one config file, transparently decrypting it if needed.
+
+        ``configparser``'s own ``read()`` cannot be used for ``keys.dat``
+        because on Android the file is encrypted (M4.5.2). Anything without
+        the vault magic is treated as legacy plain text, which is also the
+        migration path: the next ``save()`` writes it encrypted.
+        """
+        try:
+            with open(filename, 'rb') as handle:
+                data = handle.read()
+        except (IOError, OSError):
+            # configparser semantics: a missing file is not an error
+            return
+        if keystore.looks_encrypted(data):
+            try:
+                data = keystore.decrypt_blob(data)
+            except Exception as exc:  # noqa: BLE001 - never brick the app
+                # The vault is missing or belongs to another device. Starting
+                # with an empty config would silently mint a NEW identity and
+                # the user would never notice their messages go nowhere, so
+                # keep the unreadable file for recovery and say it loudly.
+                salvage = '%s.unreadable-%s' % (
+                    filename, datetime.now().strftime('%Y%m%d%H%M%S'))
+                try:
+                    os.replace(filename, salvage)
+                except OSError:
+                    salvage = '(could not be moved)'
+                print(
+                    'KEYSTORE FATAL: cannot decrypt %s (%r). The matching '
+                    'keys.vault must be present; a keys.dat copied from '
+                    'another device cannot be opened here. The file was kept '
+                    'at %s and a NEW identity will be created.'
+                    % (filename, exc, salvage), flush=True)
+                # Deliberately NOT raising: a phone that refuses to start is
+                # worse than a phone that starts with (clearly logged) new
+                # keys. `keys.dat.unreadable-*` is the recovery path.
+                return
+            else:
+                print('KEYSTORE decrypted %s (%s)' % (
+                    os.path.basename(filename), keystore.backend()),
+                    flush=True)
+        self.read_string(data.decode('utf-8'))
 
     def addresses(self, sort=False):
         """Return a list of local bitmessage addresses (from section labels)"""
@@ -117,8 +168,38 @@ class BMConfigParser(SafeConfigParser):
             sections.sort(key=lambda item: self.get(item, 'label').lower())
         return sections
 
+    @staticmethod
+    def _drop_plaintext_backups(directory, keep=None):
+        """Remove leftover ``keys.dat.*.bak`` files.
+
+        ``save()`` deletes its own backup, so anything still lying around came
+        from a crash -- and it is a **plain-text copy of every private key**,
+        which would defeat the encryption entirely (M4.5.2). Only call this
+        when the live file is encrypted.
+        """
+        try:
+            names = os.listdir(directory)
+        except OSError:
+            return
+        for name in names:
+            if not name.startswith('keys.dat.') or not name.endswith('.bak'):
+                continue
+            path = os.path.join(directory, name)
+            if keep and os.path.abspath(path) == os.path.abspath(keep):
+                continue
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
     def save(self):
-        """Save the runtime config onto the filesystem"""
+        """Save the runtime config onto the filesystem.
+
+        M4.5.2: on Android the payload is encrypted by :mod:`keystore`; plain
+        text is still accepted on read, so existing installs migrate on their
+        first save. The write itself is atomic (temp file + ``os.replace``)
+        because a half-written ``keys.dat`` loses the identity outright.
+        """
         fileName = os.path.join(state.appdata, 'keys.dat')
         fileNameBak = '.'.join([
             fileName, datetime.now().strftime("%Y%j%H%M%S%f"), 'bak'])
@@ -133,11 +214,43 @@ class BMConfigParser(SafeConfigParser):
             # didn't exist before.
             fileNameExisted = False
 
-        with open(fileName, 'w') as configfile:
-            self.write(configfile)
+        buffer = io.StringIO()
+        self.write(buffer)
+        payload = buffer.getvalue().encode('utf-8')
+        if keystore.enabled():
+            data = keystore.encrypt_blob(payload)
+            if self.safeGet('bitmessagesettings', 'keysencrypted') != 'true':
+                # record it in the file itself, before it is written
+                SafeConfigParser.set(
+                    self, 'bitmessagesettings', 'keysencrypted', 'true')
+                buffer = io.StringIO()
+                self.write(buffer)
+                payload = buffer.getvalue().encode('utf-8')
+                data = keystore.encrypt_blob(payload)
+        else:
+            data = payload
+
+        tmpName = fileName + '.tmp'
+        descriptor = os.open(
+            tmpName, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(descriptor, 'wb') as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmpName, fileName)
+        except Exception:  # noqa: BLE001 - keep the old file instead of dying
+            try:
+                os.unlink(tmpName)
+            except OSError:
+                pass
+            raise
         # delete the backup
         if fileNameExisted:
             os.remove(fileNameBak)
+        if keystore.enabled():
+            # never leave a readable copy of the keys behind (crashes used to)
+            self._drop_plaintext_backups(os.path.dirname(fileName))
 
     def validate(self, section, option, value):
         """Input validator interface (using factory pattern)"""
