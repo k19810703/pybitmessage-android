@@ -133,6 +133,45 @@ jobs:
           ls -lh packages/android/bin/ || true
           tail -80 packages/android/build.log || true
 
+      # M5.2.1: sign with the project's *release* key when the two secrets are
+      # configured, so the downloaded artifact can be installed straight over an
+      # existing install (`adb install -r`) instead of being re-signed by hand.
+      # Without the secrets this step is skipped and the debug-signed APK ships
+      # as before -- nothing breaks, you just have to run scripts/resign-apk.sh
+      # once (see INSTALL.md §2).
+      - name: Sign with the release keystore (optional)
+        if: success()
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          RELEASE_KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASS }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_B64" ]; then
+            echo "No RELEASE_KEYSTORE_B64 secret: keeping the debug signature."
+            echo "To enable: base64 -i ~/.pybitmessage-android/signing.keystore | pbcopy"
+            echo "then add RELEASE_KEYSTORE_B64 / RELEASE_KEYSTORE_PASS / RELEASE_KEY_ALIAS (pybitmessage)."
+            exit 0
+          fi
+          set -o pipefail
+          KEYSTORE="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$RELEASE_KEYSTORE_B64" | base64 -d > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          for apk in packages/android/bin/*.apk; do
+            unsigned="$RUNNER_TEMP/unsigned.apk"
+            aligned="$RUNNER_TEMP/aligned.apk"
+            mv "$apk" "$unsigned"
+            "$BT/zipalign" -f -p 4 "$unsigned" "$aligned"
+            "$BT/apksigner" sign               --ks "$KEYSTORE" \
+              --ks-pass "pass:$RELEASE_KEYSTORE_PASS" \
+              --key-pass "pass:$RELEASE_KEYSTORE_PASS" \
+              --ks-key-alias "${RELEASE_KEY_ALIAS:-pybitmessage}" \
+              --out "$apk" "$aligned"
+            "$BT/apksigner" verify --print-certs "$apk" \
+              | grep -E "certificate SHA-256 digest"
+          done
+          rm -f "$KEYSTORE"
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4

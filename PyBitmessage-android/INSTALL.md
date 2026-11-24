@@ -46,6 +46,42 @@ adb install pybitmessage-0.1.2-arm64-v8a-debug.apk
 > 注意：卸载会连 `keys.dat` 一起删掉，**地址和私钥就没了**。要保留身份，先用
 > `adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.dat > keys.dat.bak` 备份。
 
+## 2.5 让 CI 直接产出「可覆盖安装」的包（M5.2.1）
+
+现状：CI 用**临时 debug 签名**，每个构建签名都不同，所以下载的 APK 不能直接覆盖安装
+（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。有两种解法：
+
+### A. 本地重签（默认，无需配置）
+
+```bash
+./scripts/resign-apk.sh pybitmessage-*.apk
+```
+
+第一次运行会在 `~/.pybitmessage-android/signing.keystore` 生成一把钥匙，
+之后所有包都用它签，**后续版本可直接 `adb install -r` 覆盖，数据不丢**。
+
+签名指纹（用来核对两个包是不是同一把钥匙）：
+
+```
+SHA-256: 82463dfe0a7ef14821c33fef5e462e1f7bed070387de2bee7e9dd4fdebc551c7
+```
+
+> ⚠️ **备份 `~/.pybitmessage-android/signing.keystore`**。丢了它，已经装出去的 App
+> 只能卸载再装——而卸载会删掉 `keys.dat`，地址和私钥就没了。
+
+### B. 交给 CI 签（一次配置，之后每个产物都能直接装）
+
+在仓库 **Settings → Secrets and variables → Actions** 加三条：
+
+| Secret | 值 |
+|---|---|
+| `RELEASE_KEYSTORE_B64` | `base64 -i ~/.pybitmessage-android/signing.keystore \| pbcopy`（macOS） |
+| `RELEASE_KEYSTORE_PASS` | `pybitmessage`（或你自己的密码） |
+| `RELEASE_KEY_ALIAS` | `pybitmessage` |
+
+配好后 workflow 里的 `Sign with the release keystore (optional)` 步骤会自动启用，
+日志里能看到 `certificate SHA-256 digest`；没配则跳过，产物仍是 debug 签名。
+
 ## 3. PoW 难度
 
 > **2026-11-19 之后已不需要低难度。** 设备上有 C 版 PoW 加速库（`libbitmsghash.so`），

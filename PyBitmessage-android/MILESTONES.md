@@ -348,7 +348,7 @@ M4.8.2 建议在 M4.3（保活）验证同期处理，因为它与"消息能否�
 |---|---|---|---|
 | M5.1.1 ✅ | 应用名/图标/启动图定稿 | 2h | **S**：桌面图标与应用名正确 | **设备验收**（EVIDENCE §1.56）：用产品原图生成，`scripts/make-icon.py` 可复现；桌面 squircle 下清晰；presplash 改深色 |
 | M5.1.2 ✅ | 版本号与 `softwareVersion` 对齐 | 1h | **A**：`aapt2 dump badging` 的 versionName 与 `src/version.py` 一致 | 已改为 0.6.3.2（原 0.1.2 与 userAgent 不一致） |
-| M5.2.1 | （可选）release keystore 与统一签名 | 2h | **L**：`apksigner verify` 通过；覆盖安装不丢数据 |
+| M5.2.1 ✅ | （可选）release keystore 与统一签名 | 2h | **L**：`apksigner verify` 通过；覆盖安装不丢数据 | 已完成：`scripts/resign-apk.sh` 首次生成稳定钥匙并打印指纹（`82463dfe…`）；workflow 增加可选 release 签名步骤（缺 secret 时自动跳过）；`INSTALL.md` §2.5 写了备份与配置步骤。**覆盖安装不丢数据**已多次实测（最近一次 m452→0.6.3.2，2 地址/14 条消息完好） |
 | M5.3.1 ✅ | `README-ANDROID.md`：安装/首配/互换地址 | 3h | **S**：他人按文档 10 分钟完成 D1–D3 | 已交付：安装/通知权限/ROM 保活/互换地址/耗时预期/隐私说明；旧 `INSTALL.md` 的过时结论（低难度、C PoW 缺失）已同步修正 |
 | M5.3.2 ✅ | 故障排查章节（连不上/收不到/耗电） | 2h | 文档覆盖 3 类常见问题 | 已交付：`README-ANDROID.md` §5 含连不上（dead knownnodes 诊断命令）/收不到（4 项排查表）/耗电/通知/豆腐块共 6 类 |
 | M5.4.1 | 回归 D1–D7 全跑一遍 | 4h | **全绿** |
