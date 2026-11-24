@@ -47,9 +47,17 @@ def chooseConnection(stream):
     if random.choice((False, True)) and not haveOnion:  # nosec B311
         # discovered peers are already filtered by allowed streams
         return getDiscoveredPeer()
+    # Snapshot the candidates once. knownNodes is mutated from other threads
+    # (addr messages) and later cleaned; a list built inside the loop can go
+    # empty between the two calls and random.choice() would raise IndexError
+    # out of the pool loop, killing the network thread for good.
+    candidates = list(knownnodes.knownNodes.get(stream, {}).keys())
+    if not candidates:
+        # nothing to try for this stream: let the caller's ValueError path
+        # skip it instead of crashing the network thread
+        raise ValueError
     for _ in range(50):
-        peer = random.choice(  # nosec B311
-            list(knownnodes.knownNodes[stream].keys()))
+        peer = random.choice(candidates)  # nosec B311
         try:
             peer_info = knownnodes.knownNodes[stream][peer]
             if peer_info.get('self'):

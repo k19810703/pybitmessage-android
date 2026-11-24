@@ -312,7 +312,11 @@ class BMConnectionPool(object):
                     try:
                         chosen = self.trustedPeer or chooseConnection(
                             random.choice(self.streams))  # nosec B311
-                    except ValueError:
+                    except (ValueError, IndexError):
+                        # no usable candidate (empty knownnodes during the
+                        # first bootstrap round): skip this slot instead of
+                        # raising out of the pool loop, which would kill the
+                        # network thread and with it every connection
                         continue
                     if chosen in self.outboundConnections:
                         continue

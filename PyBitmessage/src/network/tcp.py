@@ -74,6 +74,18 @@ class TCPConnection(BMProto, TLSDispatcher):
                 socket.SOCK_STREAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             TLSDispatcher.__init__(self, sock, server_side=False)
+            # M4.8.x: a fresh TCP connection is built without asyncore's own
+            # connect() (TLSDispatcher.__init__ replaces the socket that
+            # create_socket() made), and the connect() a line below is
+            # python-for-android's socket helper, not asyncore's -- nothing
+            # ever sets ``connecting``. handle_connect_event() then never runs
+            # on the SYN-ACK, ``connected`` stays False, readable() returns
+            # False and the connection can never read a byte. This went
+            # unnoticed because a loopback peer answers before the event loop
+            # first polls the socket, so the first select() reports it
+            # writable and asyncore's handle_write_event() does the connect
+            # bookkeeping instead (EVIDENCE 1.52).
+            self.connecting = True
             self.connect(self.destination)
             logger.debug(
                 'Connecting to %s:%i',

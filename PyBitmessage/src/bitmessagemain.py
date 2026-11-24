@@ -72,6 +72,11 @@ def signal_handler(signum, frame):
     # there are possible non-UI variants to run bitmessage
     # which should shutdown especially test-mode
     if state.thisapp.daemon or not state.enableGUI:
+        # M4.8.3: if the clean shutdown itself hangs (a thread blocking in
+        # join()), the process would otherwise linger until `kill -9` and
+        # leave singleton.lock behind. The watchdog forces the exit.
+        from shutdown import ShutdownWatchdog
+        ShutdownWatchdog().start()
         shutdown.doCleanShutdown()
     else:
         print('# Thread: %s(%d)' % (thread.name, thread.ident))

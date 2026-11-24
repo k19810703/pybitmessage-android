@@ -46,8 +46,37 @@ class singleinstance(object):
             # warning instead of refusing to start.
             print('WARNING: single instance lock unavailable: %s' % exc)
 
+        # M4.8.3: drop a leftover lock from a killed instance. flock() is
+        # released by the OS, so the file only misleads people reading the
+        # data directory; removing it keeps "is a node running?" honest.
+        self._remove_stale_lockfile()
+
         self.initialized = True
         atexit.register(self.cleanup)
+
+    def _remove_stale_lockfile(self):
+        """Delete the lock file if it is not held by any live process."""
+        try:
+            if sys.platform == 'win32':
+                return  # the Windows path relies on O_EXCL
+            with open(self.lockfile, 'a+') as fp:
+                # lockf() needs a file opened for writing; a read-only
+                # handle raises EBADF, which must NOT be read as "held".
+                try:
+                    fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except (IOError, OSError):
+                    return  # a live instance holds it
+                finally:
+                    try:
+                        fcntl.lockf(fp, fcntl.LOCK_UN)
+                    except (IOError, OSError):
+                        pass
+            os.unlink(self.lockfile)
+            print('Removed stale single instance lock %s' % self.lockfile)
+        except (IOError, OSError, NameError):
+            # Either another instance holds it (normal) or the file does
+            # not exist yet (first start).
+            pass
 
     def lock(self):
         """Obtain single instance lock"""
