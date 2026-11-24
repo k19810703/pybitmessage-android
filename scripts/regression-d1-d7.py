@@ -75,7 +75,8 @@ class Report(object):
     def add(self, ident, title, status, detail=''):
         self.rows.append({'id': ident, 'title': title,
                           'status': status, 'detail': detail})
-        symbol = {'PASS': '✅', 'FAIL': '❌', 'SKIP': '⏭'}.get(status, '?')
+        symbol = {'PASS': '✅', 'FAIL': '❌', 'SKIP': '⏭',
+                  'BLOCKED': '⛔'}.get(status, '?')
         print('%s %-3s %-42s %s' % (symbol, ident, title, detail), flush=True)
 
     def failures(self):
@@ -84,8 +85,8 @@ class Report(object):
     def as_markdown(self):
         lines = ['| # | 项目 | 结果 | 说明 |', '|---|---|---|---|']
         for row in self.rows:
-            symbol = {'PASS': '✅', 'FAIL': '❌', 'SKIP': '⏭'}.get(
-                row['status'], '?')
+            symbol = {'PASS': '✅', 'FAIL': '❌', 'SKIP': '⏭',
+                      'BLOCKED': '⛔'}.get(row['status'], '?')
             lines.append('| %s | %s | %s | %s |' % (
                 row['id'], row['title'], symbol, row['detail']))
         return '\n'.join(lines)
@@ -112,6 +113,76 @@ def wait_for_api(port, seconds, label):
             time.sleep(3)
     print('  %s API never came up (%r)' % (label, last), flush=True)
     return False
+
+
+def ensure_address(port, seconds, label, create_label='regression'):
+    """Return the node's addresses, creating one when the home is fresh.
+
+    A headless node never creates its first address by itself -- only the Qt UI
+    does that on first run -- so a brand-new ``pubnet_node.py`` home starts with
+    ``listAddresses() == []``. The API command is the documented way to get one
+    (and it is the same code path the GUI uses).
+    """
+    deadline = time.time() + seconds
+    asked = False
+    while time.time() < deadline:
+        try:
+            addresses = [a['address'] for a in api(port).listAddresses()['addresses']]
+            if addresses:
+                return addresses
+            if not asked:
+                print('  %s 没有地址，调用 createRandomAddress' % label,
+                      flush=True)
+                api(port, timeout=300).createRandomAddress(b64(create_label))
+                asked = True
+        except Exception as exc:  # noqa: BLE001
+            print('  %s: %r' % (label, exc), flush=True)
+        time.sleep(5)
+    print('  %s 在 %ds 内没拿到地址' % (label, seconds), flush=True)
+    return []
+
+
+def addressbook(port):
+    """Address-book entries as a flat list of addresses.
+
+    The API returns ``{'addresses': [{'label':..., 'address':...}, ...]}``; some
+    versions omit ``address`` for entries created before labels existed.
+    """
+    raw = api(port).listAddressBookEntries()
+    entries = raw.get('addresses', raw) if isinstance(raw, dict) else raw
+    out = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            value = entry.get('address') or entry.get('label')
+        else:
+            value = entry
+        if value:
+            out.append(value)
+    return out
+
+
+def wait_for_connections(port, minimum, seconds, label):
+    """Wait until *port* has at least *minimum* established connections.
+
+    A node that cannot get a single connection can neither publish its pubkey
+    nor receive anything, so messaging checks are meaningless against it. The
+    usual cause here is an egress IP that peers already have connections from
+    ("Too many connections from your IP"), which is an environment property.
+    """
+    deadline = time.time() + seconds
+    best = 0
+    while time.time() < deadline:
+        try:
+            count = int(api(port).clientStatus()['networkConnections'])
+            best = max(best, count)
+            if count >= minimum:
+                return count
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(5)
+    print('  %s 最多拿到 %d 条连接（需要 %d）' % (label, best, minimum),
+          flush=True)
+    return best
 
 
 def inbox(port):
@@ -181,18 +252,23 @@ def run(args):
             return report
 
         # ---- D1: both sides have an address ------------------------------
-        addr_a = api(mac).listAddresses()['addresses'][0]['address']
-        addrs_b = [a['address'] for a in api(tablet).listAddresses()['addresses']]
+        addrs_a = ensure_address(mac, 300, 'A(Mac)', 'regression-A')
+        addrs_b = ensure_address(tablet, 60, 'B(平板)')
+        if not addrs_a or not addrs_b:
+            report.add('D1', '两台设备各生成地址', 'FAIL',
+                       'A=%d 个地址，B=%d 个地址' % (len(addrs_a), len(addrs_b)))
+            return report
+        addr_a = addrs_a[0]
         report.add('D1', '两台设备各生成地址', 'PASS',
                    'A=%s  B=%s' % (short(addr_a), short(addrs_b[0])))
         addr_b = addrs_b[0]
 
         # ---- D2: address can be added to the address book ----------------
         try:
-            api(tablet).addAddressBookEntry('A-mac', addr_a)
+            api(tablet).addAddressBookEntry(addr_a, b64('A-mac'))
         except Exception as exc:  # noqa: BLE001 - duplicate is fine
             print('  addAddressBookEntry: %r' % (exc,), flush=True)
-        book = [e['address'] for e in api(tablet).listAddressBookEntries()]
+        book = addressbook(tablet)
         report.add('D2', 'B 能把 A 的地址加进通讯录',
                    'PASS' if addr_a in book else 'FAIL',
                    '通讯录 %d 条，含 A=%s' % (len(book), addr_a in book))
@@ -201,9 +277,25 @@ def run(args):
             report.add('D3', 'B→A 消息到达', 'SKIP', '--skip-send')
             report.add('D4', 'A→B 回复到达', 'SKIP', '--skip-send')
         else:
+            online = wait_for_connections(mac, 1, args.connect_timeout,
+                                          'A(Mac)') >= 1
+            if not online:
+                reason = ('A(Mac) 无法建立任何公网连接（出口 IP 被节点以 '
+                          'Too many connections from your IP 拒绝），'
+                          '双向收发无法执行')
+                report.add('D3', 'B→A 消息到达', 'BLOCKED', reason)
+                report.add('D4', 'A→B 回复到达', 'BLOCKED', reason)
+                report.add('D5', '锁屏 30 分钟仍能收', 'SKIP',
+                           '用户明确要求放到最后，本轮不验')
+                report.add('D6', '重启后地址/消息/联系人都在', 'BLOCKED',
+                           'D3/D4 未完成，本轮不做破坏性重启')
+                report.add('D7', '全程无 FATAL', 'BLOCKED', '同上')
+                return report
+
             # ---- D3: B -> A ---------------------------------------------
             tag = 'REG-B2A-%d' % int(time.time())
-            api(tablet).sendMessage(addr_b, addr_a, b64(tag),
+            # signature is sendMessage(toAddress, fromAddress, ...)
+            api(tablet).sendMessage(addr_a, addr_b, b64(tag),
                                     b64('regression D3 ' + tag))
             took = wait_for_subject(mac, tag, args.send_timeout, 'A')
             report.add('D3', 'B→A 消息到达', 'PASS' if took else 'FAIL',
@@ -212,7 +304,7 @@ def run(args):
 
             # ---- D4: A -> B ---------------------------------------------
             tag = 'REG-A2B-%d' % int(time.time())
-            api(mac).sendMessage(addr_a, addr_b, b64(tag),
+            api(mac).sendMessage(addr_b, addr_a, b64(tag),
                                  b64('regression D4 ' + tag))
             took = wait_for_subject(tablet, tag, args.send_timeout, 'B')
             report.add('D4', 'A→B 回复到达', 'PASS' if took else 'FAIL',
@@ -233,7 +325,7 @@ def run(args):
 
         # ---- D6: restart keeps identity / messages / contacts ------------
         before = (set(addrs_b), len(inbox(tablet)),
-                  len(api(tablet).listAddressBookEntries()))
+                  len(addressbook(tablet)))
         adb('shell', 'am', 'force-stop', PKG)
         time.sleep(3)
         adb('shell', 'am', 'start', '-n', ACTIVITY)
@@ -245,7 +337,7 @@ def run(args):
                          [a['address'] for a in
                           api(tablet).listAddresses()['addresses']]),
                      len(inbox(tablet)),
-                     len(api(tablet).listAddressBookEntries()))
+                     len(addressbook(tablet)))
             ok = before == after
             report.add('D6', '重启后地址/消息/联系人都在',
                        'PASS' if ok else 'FAIL',

@@ -590,8 +590,8 @@ class BMRPCDispatcher(object):
             "SELECT label, address FROM %slist WHERE enabled = 1" % kind
         )
         data = [
-            {'label': base64.b64encode(
-                shared.fixPotentiallyInvalidUTF8Data(label)),
+            {'label': base64.b64encode(_as_bytes(
+                shared.fixPotentiallyInvalidUTF8Data(label))),
              'address': address} for label, address in queryreturn
         ]
         return {'addresses': data}
@@ -638,7 +638,7 @@ class BMRPCDispatcher(object):
             streamNumber = decodeAddress(address)[2]
             label = self.config.get(address, 'label')
             if self._method == 'listAddresses2':
-                label = base64.b64encode(label)
+                label = base64.b64encode(_as_bytes(label))
             data.append({
                 'label': label,
                 'address': address,
@@ -661,7 +661,10 @@ class BMRPCDispatcher(object):
         ) if label else sqlQuery("SELECT label, address from addressbook")
         data = []
         for label, address in queryreturn:
-            label = shared.fixPotentiallyInvalidUTF8Data(label)
+            # fixPotentiallyInvalidUTF8Data() returns str for str input on py3,
+            # and b64encode() needs bytes. This used to crash listAddressBook
+            # Entries the moment the book was non-empty (M5.4.1 run, D2).
+            label = _as_bytes(shared.fixPotentiallyInvalidUTF8Data(label))
             data.append({
                 'label': base64.b64encode(label),
                 'address': address
@@ -1389,7 +1392,7 @@ class BMRPCDispatcher(object):
             "SELECT label, address, enabled FROM subscriptions")
         data = []
         for label, address, enabled in queryreturn:
-            label = shared.fixPotentiallyInvalidUTF8Data(label)
+            label = _as_bytes(shared.fixPotentiallyInvalidUTF8Data(label))
             data.append({
                 'label': base64.b64encode(label),
                 'address': address,
