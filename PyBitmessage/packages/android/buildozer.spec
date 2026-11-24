@@ -28,7 +28,11 @@ source.include_exts = py,png,jpg,kv,atlas,tflite,sql,json,ini,pem
 #source.exclude_patterns = license,images/*/*.jpg
 
 # (str) Application versioning (method 1)
-version = 0.1.2
+# Must match src/version.py softwareVersion (M5.1.2): that is the string this
+# node advertises to the network in its userAgent (/PyBitmessage:<version>/)
+# and the one `aapt2 dump badging` reports. Two different numbers made "which
+# build is on the device?" unanswerable.
+version = 0.6.3.2
 
 # (str) Application versioning (method 2)
 # version.regex = __version__ = ['"](.*)['"]
