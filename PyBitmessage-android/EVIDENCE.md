@@ -636,6 +636,17 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 `self.streams` 仍是默认 `[0]`（version 尚未解析完），这些连接会被跳过。属正常跳过，
 但如果长期不更新会影响对象分发效率，记入待观察。
 
+#### 固化（零热补丁）
+
+新包 run **45320464967**（`/tmp/pybitmessage-m421final-2026-11-24.apk`，本钥重签，
+sha256 `92dbea1d…20fa9`）已装机并删除全部热补丁：
+
+- `run-as … ls files/app/*.py` → **空**（零热补丁）
+- 备份的私钥/消息库未被覆盖（装机后地址与 13 条收件箱仍在）
+- 截图 `artifacts/m421-final-zero-hotpatch.png`：通知栏「PyBitmessage 正在运行」
+- 重装后系统把权限重置为未授予（`REVOKED_COMPAT`），App 再次正常弹出申请 → 说明
+  **首次安装路径**和**升级路径**都验过了
+
 **平板当前状态（可回滚）**
 
 ```
