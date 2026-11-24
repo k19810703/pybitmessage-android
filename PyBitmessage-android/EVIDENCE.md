@@ -591,6 +591,92 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.55 ✅✅✅ M4.5.2 私钥加密：Android Keystore 包裹 + keys.dat 密文（2026-11-24 14:20）
+
+**目标（C4）**：`keys.dat` 里不能有明文私钥，而 App 仍能正常启动并解密。
+
+**设计：信封加密**
+
+```
+keys.dat  = AES-256-CBC(enc_key, iv) + HMAC-SHA512(mac_key)   ← 自带 magic 便于识别
+enc_key/mac_key = HMAC-SHA512(master, 不同标签)[:32]           ← 密钥分离
+master    = 32 字节随机数
+          ├─ Android：由 AndroidKeyStore 里的 AES-GCM 密钥（别名 pybitmessage-vault）包裹
+          │           密钥材料不出 TEE，root 也导不出
+          └─ 桌面/CI：keys.vault（0600）—— 仅用于保持格式一致，**不是安全边界**
+```
+
+文件格式 `b'#BMENC1\n' + iv(16) + mac(32) + ciphertext`，`mac` 覆盖 `iv||ciphertext`（encrypt-then-MAC）。
+读的时候靠 magic 判断：**没有 magic 就是旧明文**，下一次 `save()` 自动加密 —— 这就是迁移路径。
+
+**改动**
+
+| 文件 | 改动 |
+|---|---|
+| `src/keystore.py`（新增） | 信封加密、magic 识别、篡改检测、两种后端、`enabled()` |
+| `src/bmconfigparser.py` | `read()` 走 `_read_config_file()`（透明解密）；`save()` 走**临时文件 + fsync + os.replace**（原子写，半个 keys.dat 等于丢身份）；首次加密时写入 `keysencrypted = true` |
+| `src/main.py` | 启动打印 `KEYSTORE enabled=… backend=…`，日志本身就能回答"是否加密、用什么加密" |
+
+**设备实测（平板 b45f8e87，Android 13）**
+
+```
+KEYSTORE vault via AndroidKeyStore
+KEYSTORE enabled=True backend=AndroidKeyStore
+KEYSTORE decrypted keys.dat (AndroidKeyStore)
+```
+
+| 验收 | 结果 |
+|---|---|
+| **F** `keys.dat` 无私钥明文 | ✅ 文件头 `#BMENC1`，`grep -c 'privsig\|privenc\|BM-'` = **0** |
+| **F** App 能正常启动并解密 | ✅ 重启后 `dpkg` pid 正常，日志见上 |
+| **F** 身份不变 | ✅ 重启后地址仍为 `BM-2cXrmLDco…` + `BM-2cWGibweLd…`，收件箱 14 条，连接 3 条 |
+| vault 是硬件包裹的 | ✅ `keys.vault` 60 B 密文（base64 文本形态会是 44 B ASCII，明显不同） |
+
+**顺带修掉的真实泄漏**：`save()` 崩溃时会留下 `keys.dat.*.bak`，那是**明文私钥副本**，
+一直躺在目录里会让加密形同虚设。现在只要加密开启，保存后就会清掉所有 `.bak`（有单测）。
+
+**测试**：`tests/test_keystore.py` 14 条全过（往返 / 每次新 IV / 篡改拒绝 / 截断拒绝 /
+换金库打不开 / vault 权限 0600 / 桌面默认不加密 / 明文可读 / 保存后加密并置位 /
+多次保存幂等 / 不可解密时保留原文不销毁 / 明文备份被清理 / 无残留临时文件）。
+全套相关测试 30 条通过。
+
+**踩坑记录（jnius 传 Java 数组，全部实测）**——给以后要用 Keystore 的人省时间：
+
+| 写法 | 结果 |
+|---|---|
+| `autoclass('[Ljava.lang.String;')(n)` | `JavaException('No constructor available')` |
+| `autoclass('java.lang.String[]')` | **进程硬 abort**：`JNI DETECTED ERROR: illegal class name`（FindClass 只认 `/` 分隔的 JNI 描述符，且这个错误 Python 接不住） |
+| 传 Python list 给 `String...` | `ArrayStoreException: java.lang.String[] cannot be stored in an array of type java.lang.String[]`（pyjnius 把 list 转成 Object[]） |
+| 用 `java.lang.reflect.Array` 造好真 `String[]` 再传 | 同样 `ArrayStoreException` —— varargs 参数会把你的数组当**一个元素**再包一层 |
+| **直接传裸字符串给 `String...`** | ✅ 正确，Java 自己打包 |
+| `Cipher.init(mode, key)` 不 cast | `TypeError: Invalid instance of 'javax/crypto/SecretKey' passed for a 'java/security/cert/Certificate'` → 必须 `cast(Key, key)` |
+
+**固化进包（零热补丁，2026-11-24 14:35）**
+
+新包 run **45338885347**（`/tmp/pybitmessage-m452final-2026-11-24.apk`，本钥重签，
+sha256 `8052cf6d…6cf16f0`）装机后删除全部热补丁，冷启动日志：
+
+```
+PROBE summary: 8/9 ok, failed=pycryptodome
+KEYSTORE vault via AndroidKeyStore
+KEYSTORE enabled=True backend=AndroidKeyStore
+KEYSTORE decrypted keys.dat (AndroidKeyStore)
+NOTIFY: POST_NOTIFICATIONS already granted
+NOTIFY: inbox insert hook installed
+```
+
+`files/app/*.py` = **0 个**（零热补丁）；`keys.dat` 头仍是 `#BMENC1`；
+地址 2 个、收件箱 14 条、连接 3 条，全部完好。
+
+> ⚠️ 冷启动时这个包会重新解压 Python 运行时，**实测要 3–5 分钟**（比文档里写的
+> 30–60 秒长），期间 logcat 只有 `extracting …` 行。`README-ANDROID.md` 已按
+> 实测值更新。
+
+**已知限制（必须写在文档里，别过度承诺）**：
+`keys.vault` 与 `keys.dat` 在同一目录。**备份/迁移时必须两个文件一起拷**，
+只拷 `keys.dat` 在新设备上打不开（会走"保留原文 + 新建身份"的兜底路径，
+日志打 `KEYSTORE FATAL: cannot decrypt …`）。
+
 ### 1.54 ✅✅✅ 设备验收：M4.2.1 通过 + M4.8.9 关闭（2026-11-24 11:45）
 
 **设备**：小米平板 5 `b45f8e87`（Android 13 / API 33）

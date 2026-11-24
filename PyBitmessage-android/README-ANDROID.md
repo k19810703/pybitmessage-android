@@ -23,8 +23,6 @@
 | 新消息系统通知 | ✅ 含中文主题 |
 
 **还没做的**（别指望）：
-
-- 私钥在 `keys.dat` 里仍是**明文**（只靠 Android 应用隔离保护）
 - 横屏布局（当前锁竖屏）
 - 界面没有语言切换（中文是内置的）
 - 锁屏超长时间的收消息能力**尚未完成 30 分钟验收**
@@ -50,8 +48,9 @@ adb install pybitmessage-0.1.2-arm64-v8a-debug.apk
 adb shell am start -n at.bitmessage.pybitmessage/org.kivy.android.PythonActivity
 ```
 
-> **第一次启动要等 30–60 秒**（解压 Python 运行时），这期间是黑屏/白屏，**不是卡死**。
-> 第二次启动秒开。
+> **第一次启动要等 3–5 分钟**（解压 Python 运行时，实测值），这期间是黑屏/白屏，
+> 下拉通知栏也看不到任何东西，**不是卡死**。第二次启动秒开。
+> 判断是否还在解压：`adb logcat -s python:* | grep extracting` 还在输出就说明在跑。
 
 ### 1.3 升级不丢地址
 
@@ -219,9 +218,12 @@ adb shell am start -n at.bitmessage.pybitmessage/org.kivy.android.PythonActivity
 
 - 消息**端到端加密**（ECIES），P2P 链路本身可为明文或 TLS，不中继到任何服务器
 - **没有任何遥测/上报**，App 只做 Bitmessage 协议本身的事
-- 私钥存在 `keys.dat`（应用私有目录）。**当前未加密**，依赖 Android 的应用沙箱；
-  手机上装了恶意软件或有 root 权限，私钥可被读走
-- 换机 = 换身份。地址和私钥不会跟着你走，除非手动备份 `keys.dat`
+- 私钥存在 `keys.dat`，**已加密**（M4.5.2）：master 密钥由 AndroidKeyStore 包裹
+  （密钥材料不出 TEE），`keys.dat` 本身是 AES-256-CBC + HMAC 密文
+- ⚠️ **备份/迁移必须把 `keys.dat` 和 `keys.vault` 两个文件一起拷**。只拷 `keys.dat`
+  在新设备上打不开（会提示 `KEYSTORE FATAL: cannot decrypt` 并新建身份）
+- 换机 = 换身份。地址和私钥不会跟着你走，除非手动备份
+  `keys.dat` **和** `keys.vault`
 
 ---
 
@@ -241,8 +243,9 @@ adb logcat | grep -E "python|PROBE|NOTIFY|KEEPALIVE"
 adb shell run-as $PKG ls -l files/bitmessage/
 adb shell run-as $PKG grep BM- files/bitmessage/keys.dat
 
-# 备份身份（先做这个再折腾）
-adb shell run-as $PKG cat files/bitmessage/keys.dat > keys.dat.bak
+# 备份身份（两个文件都要！缺一不可）
+adb shell run-as $PKG cat files/bitmessage/keys.dat  > keys.dat.bak
+adb shell run-as $PKG cat files/bitmessage/keys.vault > keys.vault.bak
 
 # 截图
 adb exec-out screencap -p > shot.png
