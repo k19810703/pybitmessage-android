@@ -36,6 +36,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 SOURCE = os.path.join(REPO, 'image_20261123_211538_610565.jpeg')
 OUTPUT = os.path.join(REPO, 'PyBitmessage', 'src', 'images', 'icon.png')
+#: p4a shows this while the Python bundle unpacks. Without it the build falls
+#: back to Kivy's own white-kite "Loading..." splash on pure black, which also
+#: left a visible seam against the app's dark navy presplash colour.
+PRESPLASH = os.path.join(REPO, 'PyBitmessage', 'src', 'images', 'presplash.png')
+PRESPLASH_SIZE = 1024
+PRESPLASH_EMBLEM = 0.58      # emblem width as a fraction of the canvas
+PRESPLASH_LABEL = 'PyBitmessage'
 
 #: Crop box in source pixels (left, upper, right, lower). Measured, not
 #: guessed: blurring the artwork with a 12 px Gaussian kills the hairline
@@ -119,6 +126,61 @@ def build():
     return icon
 
 
+def _label_font(size):
+    """A clean sans font for the wordmark, or None when none is installed."""
+    candidates = (
+        '/System/Library/Fonts/Supplemental/Arial.ttf',
+        '/System/Library/Fonts/Helvetica.ttc',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/Library/Fonts/Arial.ttf',
+    )
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                from PIL import ImageFont
+                return ImageFont.truetype(path, size)
+            except Exception:  # noqa: BLE001 - fall through to the next one
+                continue
+    return None
+
+
+def build_presplash():
+    """The image p4a shows while the Python bundle unpacks.
+
+    Same dark navy as ``android.presplash_color`` on purpose: p4a scales this
+    image to fit and letterboxes the rest with that colour, so any mismatch
+    shows up as a bright seam on a tablet's wide screen.
+    """
+    size = PRESPLASH_SIZE
+    canvas = _flat_background(size)
+
+    # Use the *whole* artwork, not the tight icon crop: the splash should look
+    # like the product art (traces included), and the emblem then sits at ~60 %
+    # of the frame instead of bleeding off the edges. Only the outermost ring is
+    # faded into the flat navy so p4a's letterboxing leaves no seam.
+    cover = Image.open(SOURCE).convert('RGB').resize((size, size),
+                                                     Image.LANCZOS)
+    cover = ImageEnhance.Brightness(cover).enhance(1.30)
+    cover = _bloom(cover, BLOOM_THRESHOLD, 10, 1.10)
+    cover = ImageEnhance.Color(cover).enhance(1.15)
+    canvas = Image.composite(
+        cover, _flat_background(size),
+        radial_mask(size, int(size * 0.38), int(size * 0.52)))
+
+    font = _label_font(int(size * 0.062))
+    if font is not None:
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(canvas)
+        text = PRESPLASH_LABEL
+        box = draw.textbbox((0, 0), text, font=font)
+        draw.text(
+            ((size - (box[2] - box[0])) / 2, int(size * 0.895)),
+            text, font=font, fill=(226, 236, 250))
+
+    canvas.save(PRESPLASH, 'PNG', optimize=True)
+    return canvas
+
+
 def preview(icon):
     """Write the sizes a launcher actually uses, for eyeballing."""
     written = []
@@ -137,14 +199,22 @@ def preview(icon):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--preview', action='store_true')
+    parser.add_argument('--only', choices=('icon', 'presplash'),
+                        help='build just one artifact')
     args = parser.parse_args()
 
-    icon = build()
-    print('wrote %s (%dx%d, %d bytes)' % (
-        OUTPUT, icon.width, icon.height, os.path.getsize(OUTPUT)))
-    if args.preview:
-        for path in preview(icon):
-            print('preview', path)
+    if args.only in (None, 'icon'):
+        icon = build()
+        print('wrote %s (%dx%d, %d bytes)' % (
+            OUTPUT, icon.width, icon.height, os.path.getsize(OUTPUT)))
+        if args.preview:
+            for path in preview(icon):
+                print('preview', path)
+    if args.only in (None, 'presplash'):
+        splash = build_presplash()
+        print('wrote %s (%dx%d, %d bytes)' % (
+            PRESPLASH, splash.width, splash.height,
+            os.path.getsize(PRESPLASH)))
 
 
 if __name__ == '__main__':
