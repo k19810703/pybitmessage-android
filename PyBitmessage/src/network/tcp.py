@@ -349,9 +349,35 @@ class TCPConnection(BMProto, TLSDispatcher):
         self.connectedAt = time.time()
         receiveDataQueue.put(self.destination)
 
+    #: How stale ``lastTx`` may be for a socket that reports ready to read
+    #: while nothing arrives. Every read and write refreshes ``lastTx``, so a
+    #: connection that is actually exchanging bytes is never near this; the
+    #: guard only targets background peers that woke the poller without
+    #: sending anything. Kept generous so a slow peer loop still goes through
+    #: the ordinary path.
+    STALE_READ_GRACE = 15.0
+
     def handle_read(self):
         """Callback for reading from a socket"""
+        read_before = len(self.read_buf)
+        tx_before = getattr(self, 'lastTx', 0.0)
         TLSDispatcher.handle_read(self)
+        if (
+                self.connected and not self.fullyEstablished
+                and len(self.read_buf) == read_before
+                and time.time() - tx_before > self.STALE_READ_GRACE
+        ):
+            # M4.8.9: a socket that reports readable but delivers nothing for
+            # longer than the grace period is not an idle peer -- it is a
+            # stale readiness notification. Left alone, the next poller pass
+            # runs handle_read() again, recv() returns b"" and the generic
+            # asyncore path closes a perfectly healthy connection. Seen on
+            # the public network: established ~4 s, then killed without a
+            # single packet or close_reason. Skip the wake-up instead.
+            print('TCP stale read ignored: %s:%s (silent %.1fs)' % (
+                self.destination.host, self.destination.port,
+                time.time() - tx_before), flush=True)
+            return
         receiveDataQueue.put(self.destination)
 
     def handle_write(self):

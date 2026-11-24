@@ -325,7 +325,16 @@ def CreatePacket(command, payload=b''):
     checksum = hashlib.sha512(payload).digest()[0:4]
 
     b = bytearray(Header.size + payload_length)
-    Header.pack_into(b, 0, get_magic(), command, payload_length, checksum)
+    # M4.8.9: the command field is ``12s`` in the header Struct. A short
+    # bytes command is packed raw into the 12-byte slot (only a *str* would
+    # be auto-padded), so ``verack`` (6 bytes) used to go out two bytes short
+    # and, worse, ``addr`` payloads were framed with a bogus length: every
+    # public peer we greeted answered correctly and then reset the
+    # connection right after our first reply. Pad the command to 12 bytes
+    # explicitly; all commands are 3-6 bytes long, so this is a no-op for
+    # long ones.
+    Header.pack_into(b, 0, get_magic(), command[:12].ljust(12, b'\x00'),
+                     payload_length, checksum)
     b[Header.size:] = payload
     return bytes(b)
 

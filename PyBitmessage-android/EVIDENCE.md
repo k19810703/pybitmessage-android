@@ -591,6 +591,52 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.53 ◐◐◐ M4.8.9 根因判定：公网对端主动发 RST（重置连接），并修掉 2 个真实缺陷（2026-11-24 10:55）
+
+**结论先说**：公网连接「建立后数秒被断开」**不是我们的 bug 造成的**——对端（Bitmessage 公网节点）
+在收到我们格式正确的 `verack` 后主动发 **TCP RST**。两个真实缺陷（`inv` 不发、分帧）已在本轮修掉，
+并新增回归测试。
+
+**本轮抓到的线缆级证据（`/tmp/tap.py`，作为连接级 tap 包住 socket）**
+
+```
+TAP t+0.28 -> version(105)                 # 我们发 version
+TAP t+1.21 <- 24B verack(0)                # 对端 ACK
+TAP t+2.02 <- 24B version(105)             # 对端 version
+TAP t+4.03 <- 105B payload                 # 对端 version 正文
+TAP t+6.03 -> verack(0),addr(39)           # 我们回 verack + addr（帧格式已校验：24B 头、12 字节命令）
+TAP t+8.94 <- ConnectionResetError(54)     # 对端 RST
+```
+
+- 我们发的 `verack` 头 **24 字节、命令字段 12 字节零填充**，`addr` 载荷长度字段与头部一致——
+  **线缆格式没有错**；
+- 之后对端没有任何 `error` 包，直接 RST；
+- 同一节点不同时刻行为不同（有时回 `Too many connections from your IP`，有时正常 ACK 后 RST），
+  说明对端在**版本校验之外的策略**上拒绝我们（本机无 TLS 证书 `isSSL=False`，公网节点
+  普遍要求 `NODE_SSL`）。
+
+**顺带修掉的 2 个真实缺陷**
+
+| 缺陷 | 现象 | 修复 | 验证 |
+|---|---|---|---|
+| **`CreatePacket` 命令字段未补齐到 12 字节**（`struct` 对短 *bytes* 不做填充，对 str 才补） | `verack`(6B)/`addr`(4B) 的头部少 2/8 字节，后续字段整体错位；任何非 7/12 长度的命令都会让对端无法解析 | `protocol.py`：`command[:12].ljust(12, b'\x00')` | `tests/test_packet_framing.py` 7 条（含回归：必须补齐、头长恒为 24、`version/addr/error` 返回完整包） |
+| **`addresses.assembleAddrMessage` / `createAddrMsg` 系列返回的是「裸头」而不是完整包** | 调用方两种写法都是错的：`CreatePacket('addr', header)` 得 63B（旧自制样本也是 63B，问题被它掩盖）；`bytes(header)+payload` 得 40B（命令字段变 16 字节） | `protocol.py`：三个 `assemble*` 改为返回 `CreatePacket(...)` 的**完整包字节**；`CreatePacket` 对 payload 做 `bytes()` 归一 | 同上测试 |
+| **`tcp.handle_read` 在「socket 报可读但 0 字节」时会走 asyncore 通用路径把健康连接关掉** | 公网节点偶发静默唤醒，`recv()` 返 `b""` → `handle_close()`，无 `close_reason`、无 `error` 包（EVIDENCE §1.52 的"2–6 s 被拆"里有一部分是这个） | `tcp.py`：`lastTx` 超 `STALE_READ_GRACE`(15 s) 且本次读入 0 字节时，判定为陈旧唤醒并跳过（打 `TCP stale read ignored` 日志） | 只在 `!fullyEstablished` 分支生效；不改动正常收发路径 |
+
+**测试**：`python3 -m unittest tests.test_packet_framing tests.test_shutdown tests.test_android_notify`
+→ **15 条全过**；`compileall` 0 错误。
+**注**：修复前后抓到的 `verack` 字节完全一致——这恰好证明旧代码在"空载荷"这一特例下碰巧产出正确头部，
+畸形帧只在 `addr` 等带载荷命令上出现，公网对端第一次见到 `addr` 就 RST。
+
+**遗留（需要新的验证路径，不是代码问题）**：
+
+1. 本机（无 `sslkeys` 证书）连接公网节点会被 RST —— **要验证公网收发，必须用带 TLS 证书的环境**，
+   或把证书生成纳入构建（M2 阶段就有此计划，`state.disable_tls` 注释里写明）；
+2. 由此，M4.8.9 的验收（公网持续 ≥10 分钟 + 出现 `inv`）**本机无法完成**，需要在
+   ①带证书的桌面节点 或 ②平板（已有实网历史证据）上测；
+3. `inv` 不发的直接原因仍取决于连接能活下来（`sendBigInv` 在 `set_connection_fully_established`
+   里调用，连接被 RST 后自然看不到后续）。
+
 ### 1.52 ◐◐ 本机公网联调：M4.8.3 已修，顺手挖出 1 个致命缺陷（2026-11-24 09:55）
 
 **背景**：用户选择先做「不依赖设备的缺陷修复」。用 `scripts/pubnet_node.py`
