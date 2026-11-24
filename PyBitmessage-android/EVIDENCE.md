@@ -630,6 +630,16 @@ x 327..1711 / y 418..1633（1375×1210，中心 1017,1025），再据此定裁�
 （后者会进 `version` 消息的 userAgent `/PyBitmessage:0.6.3.2/`，所有对端都能看到）。
 已把 `buildozer.spec` 的 `version` 改为 **0.6.3.2**，并在 `version.py` 写明两者必须一致。
 
+**装到平板验证（run 45345527791）**
+
+```
+包     : /tmp/pybitmessage-0632-2026-11-24.apk（本钥重签，sha256 82a0673c…）
+aapt2  : versionName='0.6.3.2'  application-label:'PyBitmessage'
+         application-icon-480:'res/mipmap/icon.png'
+设备   : dumpsys 显示 versionName=0.6.3.2
+升级后 : 2 个地址 / 14 条收件箱 / 3 条连接全部完好，KEYSTORE 仍走 AndroidKeyStore
+```
+
 > 附注：本次构建首次失败**与代码无关**——runner 解析不到
 > `org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.20-RC2`（AGP 8.1.1 的传递依赖），
 > 属 Maven 侧偶发；`gh run rerun` 后 8m21s 通过。
