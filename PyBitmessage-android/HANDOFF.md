@@ -317,6 +317,26 @@ App 不崩、收发照常，只是没有通知——**这是通过标准之一�
 
 ---
 
+## 6.0e ✅ 2026-11-24 11:05：M4.8.9 定性完成（RST 来自对端）+ 3 个真实修复
+
+**结果**：线缆抓包证明「公网连接建立后数秒被断开」是**对端主动 RST**，不是我们的 bug
+（EVIDENCE §1.53）。但顺着这条线索修掉了 3 个真问题，并补了 7 条回归测试。
+
+| 修复 | 文件 | 测试 |
+|---|---|---|
+| `CreatePacket` 命令字段补齐到 12 字节 | `protocol.py` | `tests/test_packet_framing.py` |
+| `assembleAddrMessage`/`assembleVersionMessage`/`assembleErrorMessage` 返回**完整包**（原来返回裸头） | `protocol.py` | 同上 |
+| `tcp.handle_read` 遇到「可读但 0 字节」的陈旧唤醒不再误关连接 | `tcp.py`（`STALE_READ_GRACE=15s`） | 只在 `!fullyEstablished` 分支生效 |
+
+**测试**：`tests.test_packet_framing + test_shutdown + test_android_notify` = **15 条全过**。
+
+**最新包**：`/tmp/pybitmessage-m489-2026-11-24.apk`（run 45315773202，个钥重签，
+sha256 `a0e547f3…877491`）—— **包含了 M4.2.1 / M4.8.3 / M4.8.9 全部修复，装这一个即可**。
+
+**下一步（M4.8.9 的验收）**：本机没有 TLS 证书（`src/sslkeys` 不入库），公网节点直接 RST，
+所以「公网 ≥10 分钟稳定 + 发出 `inv`」这条验收**只能在 ①带证书的节点 或 ②平板 上做**。
+平板之前有公网收发历史证据，装 `m489` 后按 `scripts/PUBNET-TEST.md` 复测即可。
+
 ## 6.0d 🚨 2026-11-24 上午：M4.2.1 + M4.8.3 已出包，同时挖出一个致命网络缺陷
 
 **本轮到手的包**（都可用 `scripts/resign-apk.sh` 个钥覆盖升级）：
