@@ -281,9 +281,12 @@ def describe_install():
         try:
             from jnius import autoclass
             Build = autoclass('android.os.Build')
+            # Build.VERSION is a *nested* class: in jnius it must be spelled
+            # with '$', otherwise the attribute simply does not exist.
+            BuildVersion = autoclass('android.os.Build$VERSION')
             lines.append('设备: %s / %s / SDK %s' % (
-                Build.MANUFACTURER, Build.MODEL, Build.VERSION.SDK_INT))
-            lines.append('Android 版本: %s' % Build.VERSION.RELEASE)
+                Build.MANUFACTURER, Build.MODEL, BuildVersion.SDK_INT))
+            lines.append('Android 版本: %s' % BuildVersion.RELEASE)
         except Exception as exc:  # noqa: BLE001
             lines.append('设备: (读取失败 %r)' % (exc,))
     try:
@@ -399,15 +402,29 @@ def _publish_to_downloads(context, path, display_name, mime='application/zip'):
 
     MediaStore = autoclass('android.provider.MediaStore')
     Downloads = autoclass('android.provider.MediaStore$Downloads')
+    # nested classes need '$' in jnius (MediaStore$MediaColumns), otherwise
+    # MediaStore.MediaColumns raises AttributeError at runtime -- exactly the
+    # Android side of the "works on desktop, fails on device" trap.
+    Columns = autoclass('android.provider.MediaStore$MediaColumns')
     ContentValues = autoclass('android.content.ContentValues')
 
+    try:
+        collection = Downloads.EXTERNAL_CONTENT_URI
+    except AttributeError:
+        collection = MediaStore.EXTERNAL_CONTENT_URI
+
     resolver = context.getContentResolver()
+    # Only String values go into ContentValues. IS_PENDING would need a
+    # java.lang.Integer/Boolean object: handing jnius a Python int makes the
+    # overload resolver pick the wrong signature and raise
+    # "No methods called put ... matching your arguments". The publish window
+    # without IS_PENDING is milliseconds and a half-written log zip is
+    # harmless, so it is not worth the extra failure mode.
     values = ContentValues()
-    values.put(MediaStore.MediaColumns.DISPLAY_NAME, display_name)
-    values.put(MediaStore.MediaColumns.MIME_TYPE, mime)
-    values.put(MediaStore.MediaColumns.RELATIVE_PATH, 'Download/PyBitmessage')
-    values.put(MediaStore.MediaColumns.IS_PENDING, 1)
-    uri = resolver.insert(Downloads.EXTERNAL_CONTENT_URI, values)
+    values.put(Columns.DISPLAY_NAME, display_name)
+    values.put(Columns.MIME_TYPE, mime)
+    values.put(Columns.RELATIVE_PATH, 'Download/PyBitmessage')
+    uri = resolver.insert(collection, values)
     if uri is None:
         return None
     stream = resolver.openOutputStream(uri)
@@ -423,9 +440,6 @@ def _publish_to_downloads(context, path, display_name, mime='application/zip'):
             stream.close()
         except Exception:  # noqa: BLE001
             pass
-    done = ContentValues()
-    done.put(MediaStore.MediaColumns.IS_PENDING, 0)
-    resolver.update(uri, done, None, None)
     return uri
 
 
@@ -446,14 +460,18 @@ def share_archive():
 
     display_name = os.path.basename(archive_path)
     try:
-        from jnius import autoclass
+        from jnius import autoclass, cast
         Intent = autoclass('android.content.Intent')
+        Parcelable = autoclass('android.os.Parcelable')
 
         uri = _publish_to_downloads(context, archive_path, display_name)
         intent = Intent(Intent.ACTION_SEND)
         if uri is not None:
             intent.setType(mime_type())
-            intent.putExtra(Intent.EXTRA_STREAM, uri)
+            # putExtra(String, ...) is overloaded; without the cast jnius picks
+            # the String variant and raises TypeError("Invalid instance of
+            # 'android/net/Uri' passed for a 'java/lang/String'").
+            intent.putExtra(Intent.EXTRA_STREAM, cast(Parcelable, uri))
             intent.putExtra(
                 Intent.EXTRA_SUBJECT,
                 _java_string('PyBitmessage 诊断日志 ' + display_name))
