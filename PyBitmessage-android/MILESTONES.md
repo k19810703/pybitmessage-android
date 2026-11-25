@@ -295,6 +295,8 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |
 | M4.7.1 | 电量策略（仅 Wi-Fi/充电同步） | 设置项 + 网络策略 | 4h | **T**：1 小时后台耗电 ≤ 8%（C3） |
 
+| **M4.8.10** ✅ | 连接数恒为 0（协议握手完成但从未 established） | `networkConnections=0`，日志里 `sent verack` 数十次、`TCP established` 为 0 | TLS 升级默认关闭 + 握手 20s 超时 + `process()` 跟进状态移交 | **A**：`networkConnections ≥ 1`；**L**：出现 `TCP established` | M4.8 | **高（用户报告）** |
+
 | **M6.6** ✅ | 设备端诊断日志（3 天轮转）+ 一键分享 | 用户装了包但收不到消息、没有 adb，需要能自己把证据发出来 | `src/applog.py`：tee stdout/stderr 到 `logs/app-YYYYMMDD.log`、保留 3 天、单日 8MB 上限、异常全栈；`share_archive()` 用 MediaStore 导出 zip 并调系统分享（不依赖 FileProvider/清单） | **S**：主界面「日志」按钮 → 分享面板；zip 含 meta + 3 天日志 + tail | M6 | **高（用户提出）** |
 | | | | | **设备验收通过**（EVIDENCE §1.62）：日志 8 KB 含 PROBE；点「日志」→ zip 落到 `Download/PyBitmessage/` → 微信聊天界面；zip 含 meta/日志/tail。9 条单测 |
 

@@ -591,6 +591,56 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.63 ✅✅✅ 根因：连接数为 0 = TLS 升级卡死（2026-11-25 21:10）
+
+**用户诉求**：别人装了包"收不到消息"；平板上 `networkConnections=0`。
+
+**现象**（先用新加的 `[DIAG]` 日志定位）：
+
+```
+[DIAG] 连接 established=0 outbound=52 inbound=0 | knownnodes=835 (rating>0: 4)
+[DIAG]   out 154.240.245.193:8444 est=False connected=False verack(sent=False recv=False) ...
+```
+但同一份日志里 **1073 行 BMPROTO**、`sent verack` 有 27 次、`PVC -> True` 全过，
+**`TCP established` 却是 0** ——也就是说**协议层握手已经完成，但连接从未被标记为建立**。
+
+**逐步逼近**（桌面节点复现，不依赖平板，快得多）：
+
+| 步骤 | 手段 | 结果 |
+|---|---|---|
+| 1 | 在 `process()` 里打点，看状态去哪了 | `state=tls_init->tls_handshake`，然后 `tls_handshake->tls_handshake` 反复 23 次 |
+| 2 | 在 `bm_command_verack` / `bm_command_version` 打点 | `verackReceived=True isSSL=True disable_tls=False` |
+| 3 | 查 `haveSSL` | `haveSSL(server=False)` **无条件返回 True**（注释写"client works ok"） |
+
+**根因**：只要对端在 version 里 advertise `NODE_SSL`，我们**必然**把连接切到
+`state_tls_init`，用 2013 年代的客户端 TLS 配置（`AECDH-AES256-SHA` + `secp256k1` + 封顶 TLS1.2）
+去升级；对今天的节点这个握手**永远不完成**，连接就停在 `tls_handshake` 直到被 idle 回收。
+`fullyEstablished` 因此永远是 False → `clientStatus.networkConnections=0` → 用户看到"没有连接"。
+
+**A/B 实测**（桌面节点，同样 85 秒、maxout=2）：
+
+| 条件 | TCP established | networkConnections |
+|---|---|---|
+| TLS 开（原默认） | **0** | **0** |
+| TLS 关（`--disable-tls`） | **10** | **2** |
+| TLS 关 + 撤掉 `process()` 补丁 | 4 | 2 |
+
+**修复**（commit `c54acea`）：
+
+1. **`main.py`：TLS 默认关闭**（`state.disable_tls = env BITMESSAGE_ENABLE_TLS != '1'`）。
+   点对点链路可以是明文（协议允许），消息内容本来就是端到端加密。
+2. **`network/tls.py`：加 20 秒握手超时**，超时关连接并写 `close_reason`，
+   避免一次卡死的升级长期占着连接槽（即使用户主动开 TLS 也不会挂死）。
+3. **`network/advanceddispatcher.py`：`process()` 跟进状态移交**——
+   handler 用 `set_state()` 交接后立刻执行新状态，而不是等对端再发数据。
+   **诚实说明**：A/B 显示明文下没有这条也能建立（4 条），所以它**不是本次症状的主因**，
+   而是修掉一个潜在死锁（对端若发完 verack 就沉默，旧代码永远不会运行
+   `connection_fully_established`）。
+
+**顺带修掉的测试问题**：`applog.reset_for_tests()` 之前没把 `sys.stdout` 还原，
+导致后续测试里任何 `print` 都会在当前 `state.appdata` 下建 `logs/`，让无关测试的
+`os.rmdir` 失败。现在会还原流。全套 **51 条测试通过**。
+
 ### 1.62 ✅ M6.6 设备端诊断日志（3 天轮转）+ 一键分享（2026-11-25 16:50）
 
 **需求来源**：用户把包发给别人装，对方"收不到消息"；对方没有 adb、看不到 logcat，
