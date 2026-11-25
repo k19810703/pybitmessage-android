@@ -317,6 +317,41 @@ App 不崩、收发照常，只是没有通知——**这是通过标准之一�
 
 ---
 
+## 6.0j ⏸ 2026-11-25 17:00：暂停点（用户回家路上，无网络；**代码已改完，未验证**）
+
+### 这一轮改了什么（commit `6663bc2`，已 push，CI 会出包）
+
+1. **「分享日志」入口从主界面挪到抽屉菜单**（用户反馈：主界面那个 Screen 无法从菜单进入，
+   入口放错了）。抽屉最下面新增「分享日志」，调用 `app.share_logs()`。
+2. **新增 `src/diag.py`：针对用户最关心的两个问题做定向诊断**
+   - **连接数为 0**：每次快照记录 established/outbound/inbound、**逐连接握手状态**
+     （est/connected/verack sent/recv/state/idle/close_reason）、knownnodes 数量与
+     rating>0 个数、maxoutbound 等关键设置、网络线程是否存活
+   - **对端 error 包**：包一层 `bm_command_error`（保存/恢复 `payloadOffset`，不干扰原逻辑），
+     把 `Too many connections from your IP` / `time is too far` 这类文本按对端计数入日志
+   - **连接数变化即记录**（每 30s 检查，变化就打完整快照），便于还原时间线
+   - **发送失败**：发送前 `describe_send()` 记录地址解析结果、**是否已持有对方公钥**、
+     历史发送状态；发送后 `watch_sent()` 跟踪
+     `awaitingpubkey → doingpubkeypow → doingmsgpow → msgsent → ackreceived` 并打时间戳，
+     超时则明确写「这不是已发送，是卡住了」
+
+### 尚未验证（下次设备可用时按顺序做）
+
+1. 出包后装到平板（包名不变、本钥重签）：`gh run list` 取最新 run，`scripts/resign-apk.sh`，`pm install -r -d`
+2. 抽屉 → 分享日志：应弹分享面板、zip 落到 `Download/PyBitmessage/`
+3. **重点看 `logs/app-*.log` 里的 `[DIAG]` 段**：
+   - `[DIAG] 连接 established=… outbound=… inbound=…` → 若 established=0，紧跟着的逐连接表
+     和「对端 error 包」就能说明是被拒、DNS 不通、还是根本没发起
+   - 发一条消息，看 `发送状态 … -> …` 的时间线与最终状态
+4. 把「0 连接」的真实原因按上面证据定性（这轮用户的原始诉求）
+
+### 本地已做过的验证
+
+`python3 -m unittest` 51 条通过；`compileall` 0 错误；`scripts/scan-english.py --strict` 通过
+（新增菜单项「分享日志」已进字典）。
+
+---
+
 ## 6.0i ⏸ 2026-11-25 14:20：M6 推进中（接设备后第一件事是装包）
 
 ### 一口气要做的事（设备一插上）
