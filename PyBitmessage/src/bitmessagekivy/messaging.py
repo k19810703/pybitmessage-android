@@ -10,6 +10,7 @@ import threading
 from kivy.clock import Clock
 from kivy.core.clipboard import Clipboard
 from kivy.core.text import LabelBase
+from kivy.core.window import Window
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -131,54 +132,109 @@ class MessagingScreen(Screen):
         lbl.bind(size=lambda w, *_: setattr(w, 'text_size', (w.width, None)))
         return lbl
 
-    def _build_ui(self):
-        root = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(8))
+    # ---- layout ---------------------------------------------------------
+    #: Wider than this and taller than the second value -> two columns.
+    #: A tablet in landscape is ~1280x800 dp, a phone in landscape ~800x360 dp:
+    #: the height test keeps phones on the single-column layout.
+    WIDE_WIDTH = dp(720)
+    WIDE_HEIGHT = dp(480)
 
+    def _build_ui(self):
+        self._make_widgets()
+        self.root_layout = BoxLayout(padding=dp(10), spacing=dp(8))
+        self.add_widget(self.root_layout)
+        self._wide = None
+        self._apply_layout()
+        Window.bind(size=self._on_window_resize)
+
+    def _make_widgets(self):
+        """Create the widgets once; :meth:`_apply_layout` decides the parents.
+
+        Widgets belong to exactly one parent, so the layout switch reparents
+        three *groups* instead of moving individual widgets around.
+        """
         # header: my address
-        header = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(6))
+        self.header = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(6))
         self.addr_label = self._label('我的地址：加载中…', size=14, bold=True)
         copy_btn = Button(text='复制', font_name=FONT, font_size=dp(13),
                           size_hint=(None, 1), width=dp(64))
         copy_btn.bind(on_release=lambda *_: self._copy_address())
-        header.add_widget(self.addr_label)
-        header.add_widget(copy_btn)
-        root.add_widget(header)
+        self.header.add_widget(self.addr_label)
+        self.header.add_widget(copy_btn)
 
         # inbox
-        root.add_widget(self._label('收件箱', size=13, color=(.4, .4, .4, 1),
-                                    height=dp(22)))
+        self.inbox_group = BoxLayout(orientation='vertical', spacing=dp(4))
+        self.inbox_group.add_widget(
+            self._label('收件箱', size=13, color=(.4, .4, .4, 1),
+                        height=dp(22)))
         self.inbox_box = BoxLayout(orientation='vertical', size_hint_y=None,
                                    spacing=dp(4))
         self.inbox_box.bind(minimum_height=self.inbox_box.setter('height'))
-        scroll = ScrollView(size_hint=(1, .45))
-        scroll.add_widget(self.inbox_box)
-        root.add_widget(scroll)
+        self.inbox_scroll = ScrollView()
+        self.inbox_scroll.add_widget(self.inbox_box)
+        self.inbox_group.add_widget(self.inbox_scroll)
 
         # compose
-        root.add_widget(self._label('收件人地址', size=13,
-                                    color=(.4, .4, .4, 1), height=dp(22)))
+        self.compose_group = BoxLayout(orientation='vertical', spacing=dp(6))
+        self.compose_group.add_widget(
+            self._label('收件人地址', size=13, color=(.4, .4, .4, 1),
+                        height=dp(22)))
         self.to_input = TextInput(
             hint_text='BM-2c…', multiline=False, font_name=FONT,
             font_size=dp(14), size_hint_y=None, height=dp(42))
-        root.add_widget(self.to_input)
-
-        root.add_widget(self._label('内容', size=13, color=(.4, .4, .4, 1),
-                                    height=dp(22)))
+        self.compose_group.add_widget(self.to_input)
+        self.compose_group.add_widget(
+            self._label('内容', size=13, color=(.4, .4, .4, 1), height=dp(22)))
         self.body_input = TextInput(
             hint_text='输入要发送的内容…', multiline=True, font_name=FONT,
             font_size=dp(15))
-        root.add_widget(self.body_input)
-
+        self.compose_group.add_widget(self.body_input)
         self.send_btn = Button(text='发送', font_name=FONT, font_size=dp(16),
                                size_hint_y=None, height=dp(46))
         self.send_btn.bind(on_release=lambda *_: self._on_send())
-        root.add_widget(self.send_btn)
-
+        self.compose_group.add_widget(self.send_btn)
         self.status = self._label('', size=13, color=(.1, .5, .1, 1),
                                   height=dp(24))
-        root.add_widget(self.status)
+        self.compose_group.add_widget(self.status)
 
-        self.add_widget(root)
+    def _on_window_resize(self, _window, _size):
+        # Kivy fires several resize events per rotation; coalesce them so the
+        # tree is rebuilt once, after the final size is known.
+        if getattr(self, '_resize_event', None) is not None:
+            self._resize_event.cancel()
+        self._resize_event = Clock.schedule_once(self._apply_layout, 0.15)
+
+    def _apply_layout(self, *_args):
+        wide = (Window.width >= self.WIDE_WIDTH
+                and Window.height >= self.WIDE_HEIGHT)
+        if wide == self._wide:
+            return
+        self._wide = wide
+
+        for group in (self.header, self.inbox_group, self.compose_group):
+            if group.parent is not None:
+                group.parent.remove_widget(group)
+        self.root_layout.clear_widgets()
+
+        if wide:
+            # list on the left, composer on the right (M6.3.2)
+            self.root_layout.orientation = 'horizontal'
+            self.inbox_scroll.size_hint_y = 1
+            left = BoxLayout(orientation='vertical', spacing=dp(8),
+                             size_hint_x=.44)
+            right = BoxLayout(orientation='vertical', spacing=dp(6),
+                              size_hint_x=.56)
+            left.add_widget(self.header)
+            left.add_widget(self.inbox_group)
+            right.add_widget(self.compose_group)
+            self.root_layout.add_widget(left)
+            self.root_layout.add_widget(right)
+        else:
+            self.root_layout.orientation = 'vertical'
+            self.inbox_scroll.size_hint_y = .45
+            self.root_layout.add_widget(self.header)
+            self.root_layout.add_widget(self.inbox_group)
+            self.root_layout.add_widget(self.compose_group)
 
     # ---- behaviour ------------------------------------------------------
     def _ensure_address(self):
