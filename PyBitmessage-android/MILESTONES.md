@@ -289,7 +289,7 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.1.2 | 通知渠道（Android 8+） | `service.py` 用 `NotificationChannel` | 2h | **S**：通知正常显示、不报渠道错误 |
 | M4.2.1 ✅ | 通知权限（Android 13+） | `POST_NOTIFICATIONS` 运行时申请 + 新消息通知 | 3h | **S**：首次启动有授权弹窗；拒绝后 App 不崩 | **设备验收通过**（EVIDENCE §1.54）：Android 13 弹窗可见、授权后前台服务通知与「新消息 / 中文主题」通知均正常 |
 | M4.3.1 | WakeLock + Doze 白名单引导 | `src/android_keepalive.py`（partial wake lock + 豁免引导）；`WAKE_LOCK` / `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 权限 | **L**：`dumpsys power` 见 `pybitmessage:node`；锁屏 5 分钟连接稳定 ≥11 | ◐ **部分通过**（EVIDENCE §1.31）：wake lock ✅、锁屏连接保持 ✅；待修 BroadcastReceiver 声明 + 待做 D5 30 分钟收消息验收 |
-| M4.4.1 | 数据持久化与恢复 | 校验 `keys.dat`/`messages.dat` 完整性 | 4h | **F**：`am force-stop` 后重启，D1/D6 仍成立 |
+| M4.4.1 ✅ | 数据持久化与恢复 | 校验 `keys.dat`/`messages.dat` 完整性 | 4h | **F**：`am force-stop` 后重启，D1/D6 仍成立 | **通过**（EVIDENCE §1.60）：`integrity_check=ok`、重启前后 2 地址/16 消息/4 联系人一致；并修掉「学到的 knownnodes 从不落盘」（507B/4 节点 → 2031B/835 节点） |
 | M4.5.1 ✅ | 禁用云备份 | `android.allow_backup = False`（spec） | 1h | **A**：aapt2 确认 `allowBackup=false`（run 45096582390，EVIDENCE §1.40） |
 | M4.5.2 ✅ | 私钥加密（Keystore 派生密钥） | 新增 `keystore.py`（信封加密），`bmconfigparser` 透明加解密 + 原子写 | 8h | **F**：`keys.dat` 中无私钥明文；App 能正常启动并解密 | **设备验收通过**（EVIDENCE §1.55）：AndroidKeyStore 包裹 master，keys.dat 为 `#BMENC1` 密文，明文关键字 0 命中；重启后地址/收件箱不变。14 条单测 |
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |

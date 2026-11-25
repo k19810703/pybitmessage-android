@@ -591,6 +591,70 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.60 ✅ M4.4.1 数据持久化 + M6.3.1 横屏（2026-11-25 13:30）
+
+#### 图标：dock 里一直是旧的 Kivy 风筝
+
+**结论：不是打包问题，是 MIUI 桌面缓存**。
+
+| 检查 | 结果 |
+|---|---|
+| APK 内图标 | ✅ `application-icon-{160,240,320,480}` 全指向 `res/mipmap/icon.png`（512×512 盾牌） |
+| 清单 | ✅ 只有一个 `<application android:icon>`，activity 无单独 icon |
+| 桌面第 3 页 | ✅ 显示新盾牌（`artifacts/icon-grid-correct.png`） |
+| 底部 dock | ❌ 仍是 Kivy 风筝（`artifacts/icon-dock-before-stale.png`） |
+| UI 树 | ✅ dock 那个节点 `content-desc` 也是 **PyBitmessage** → 同一个包，两处显示不同 |
+
+**修复**：`adb shell am force-stop com.miui.home`（重启桌面进程，重载图标缓存），
+布局与数据都不受影响。之后 dock 显示盾牌（`artifacts/icon-dock-after-fix.png`）。
+
+#### M4.4.1 数据持久化与恢复
+
+| 项 | 结果 |
+|---|---|
+| `messages.dat` 完整性 | ✅ `PRAGMA integrity_check` = **ok**；10 张表；inbox 16 / sent 12 / inventory 9678 |
+| `keys.dat` | ✅ 密文（`#BMENC1`），明文私钥关键字 **0** |
+| 重启一致性（F） | ✅ `am force-stop` + 重启前后：**2 地址 / 16 收件箱 / 4 通讯录** 完全相同 |
+| **`knownnodes.dat`** | ❌→✅ 见下 |
+
+**顺带挖到并修掉的真缺陷**：`knownnodes.dat` 的 mtime 停在 **11-24 11:13**，内容仍是
+手写的 4 个种子——而进程内已学到几百个节点。根因：`cleanupKnownNodes()` 只在
+**删除了节点**时才 `saveKnownNodes()`，`addKnownNode()` 从没设置过"脏"标记，
+所以**学到的节点永远不落盘**，每次重启都退回旧列表（正是 11-24 那次"knownnodes 全死"的成因之一）。
+
+修复（commit `fec5663`）：新增模块级 `knownNodesDirty`，
+`addKnownNode()` 新增/更新时置位、`saveKnownNodes()` 清除，
+`cleanupKnownNodes()` 改为 `needToWriteKnownNodesToDisk or knownNodesDirty` 才写。
+新增 5 条单测（`tests/test_knownnodes_persist.py`：落盘、无变化不重写、lastseen 更新算脏、保存清标记、重载可见）。
+
+**设备验证**：装含修复的包后运行约 5 分钟（一个 cleaner 周期 300s）：
+
+```
+knownnodes.dat: 507 B（4 个种子） → 2031 B / 835 个节点，mtime 2026-11-25 13:25:40
+```
+
+#### M6.3.1 横竖屏
+
+**先踩了个空**：`buildozer.spec` 的 `orientation = all` 被 buildozer 直接判为非法值；
+查 buildozer 源码发现**这个 token 只做校验、根本不传给 p4a**（`targets/android.py` 的
+p4a 构建命令里没有 `--orientation`），而 p4a 自己默认写死 portrait——`aapt2` 确认
+`screenOrientation=1`（PORTRAIT）。所以改 spec 永远没用。
+
+**真正的做法**（`src/android_keepalive.py: allow_rotation()`）：用 jnius 直接调
+`activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR)`，
+在已有的 KEEPALIVE 主线程回调里执行。日志确认：`KEEPALIVE: rotation allowed (FULL_SENSOR)`。
+
+**设备验证**：
+
+| 项 | 结果 |
+|---|---|
+| 横屏 | ✅ **铺满 2560 宽**（之前被 MIUI letterbox 成一条竖窗），`artifacts/m631-landscape.png` |
+| 不崩、不白屏、不丢页面 | ✅ 旋转时停在同一个 messaging 屏 |
+| 转回竖屏 | ✅ 正常恢复 |
+
+> 附注：横屏下"收件箱"区域被挤成两行、正文框占了大部分高度——这是 M6.3.2（响应式布局，
+> 大屏应做列表+详情两栏）要解决的，不在本任务范围。
+
 ### 1.59 ✅ M5.4.1 回归 D1–D7（D5 按约定跳过）（2026-11-25 11:45）
 
 **结果（`artifacts/regression-d1d7.md`，原始日志 `artifacts/regression-run.log`）**
