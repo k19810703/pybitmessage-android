@@ -157,6 +157,30 @@ def request_battery_optimisation_exemption(force=False):
         return False
 
 
+def allow_rotation():
+    """Let the activity follow the device orientation (milestone M6.3.1).
+
+    ``buildozer.spec``'s ``orientation`` token is validated but never forwarded
+    to python-for-android, and p4a's default is portrait -- on a 16:10 tablet
+    that makes MIUI letterbox the whole app into a tall window. Asking the
+    activity directly is the one switch that actually works, and it needs no
+    rebuild flag.
+    """
+    activity, _ = _android()
+    if activity is None:
+        return False
+    try:
+        from jnius import autoclass
+        ActivityInfo = autoclass('android.content.pm.ActivityInfo')
+        activity.setRequestedOrientation(
+            ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR)
+        print('KEEPALIVE: rotation allowed (FULL_SENSOR)', flush=True)
+        return True
+    except Exception as exc:  # noqa: BLE001 - cosmetic, never fatal
+        print('KEEPALIVE: rotation request failed: %r' % (exc,), flush=True)
+        return False
+
+
 def install():
     """Acquire the wake lock and offer the battery exemption.
 
@@ -175,6 +199,7 @@ def install():
     activity, _ = _android()
     if activity is None:
         return False
+    allow_rotation()
     return acquire_wake_lock()
 
 

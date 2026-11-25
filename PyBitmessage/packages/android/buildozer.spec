@@ -60,9 +60,13 @@ presplash.filename = %(source.dir)s/images/presplash.png
 icon.filename = %(source.dir)s/images/icon.png
 
 # (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
-# M6.3.1: allow both orientations. Was hard-wired to portrait, which on a
-# 16:10 tablet made MIUI letterbox the whole app into a tall window.
-orientation = all
+# M6.3.1: this token is *validated but never forwarded to python-for-android*
+# by buildozer (checked in buildozer/targets/android.py: the p4a build command
+# carries no --orientation), and p4a defaults to portrait. The real switch is
+# done at runtime in src/android_keepalive.allow_rotation(), which calls
+# Activity.setRequestedOrientation(FULL_SENSOR). Keep this token at its default
+# so the build stays valid.
+orientation = portrait
 
 # (list) List of service to declare
 # (list) 前台服务（M4.1）：p4a 会在独立进程 <package>:service 里跑 core_service.py
