@@ -228,6 +228,13 @@ class Lang(BaseLanguage):
         'thumb drive.': '便携模式下，消息和配置文件与程序存放在同一目录，而非系统'
         '的应用数据目录。这便于从 U 盘运行 Bitmessage。',
         'Leave these input fields blank for the default behavior.': '留空则使用默认行为。',
+        # input hints (M6.2.1) -- these were plain English literals in the .kv
+        'Search': '搜索',
+        'Empty field': '（空）',
+        'Subject': '主题',
+        'Body': '内容',
+        'Type or Select sender address': '输入或选择发件地址',
+        'Type or Scan QR code for recipients address': '输入或扫描二维码获取收件地址',
     }
 
     def _(self, text):

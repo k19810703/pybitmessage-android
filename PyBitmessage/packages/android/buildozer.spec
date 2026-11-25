@@ -60,7 +60,9 @@ presplash.filename = %(source.dir)s/images/presplash.png
 icon.filename = %(source.dir)s/images/icon.png
 
 # (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
-orientation = portrait
+# M6.3.1: allow both orientations. Was hard-wired to portrait, which on a
+# 16:10 tablet made MIUI letterbox the whole app into a tall window.
+orientation = all
 
 # (list) List of service to declare
 # (list) 前台服务（M4.1）：p4a 会在独立进程 <package>:service 里跑 core_service.py

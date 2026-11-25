@@ -17,7 +17,7 @@
                 MDTextField:
                     id: ti
                     size_hint_y: None
-                    hint_text: 'Type or Select sender address'
+                    hint_text: app.tr._('Type or Select sender address')
                     icon_right: 'account'
                     icon_right_color: app.theme_cls.primary_light
                     font_size: '15sp'
@@ -79,7 +79,7 @@
 
             MyMDTextField:
                 id: subject
-                hint_text: 'Subject'
+                hint_text: app.tr._('Subject')
                 height: 100
                 font_size: '15sp'
                 icon_right: 'notebook-outline'
@@ -98,7 +98,7 @@
                 id: scrlv
                 MDTextField:
                     id: body
-                    hint_text: 'Body'
+                    hint_text: app.tr._('Body')
                     mode: "fill"
                     fill_color: 1/255, 144/255, 254/255, 0.1
                     multiline: True

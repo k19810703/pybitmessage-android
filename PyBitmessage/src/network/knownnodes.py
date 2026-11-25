@@ -108,13 +108,22 @@ def pickle_deserialize_old_knownnodes(source):
                 addKnownNode(stream, node, params)
 
 
+#: Set whenever the in-memory table changes. ``cleanupKnownNodes()`` used to
+#: write the file only when it had *deleted* something, so nodes learned from
+#: peers were never persisted: the tablet kept 4 hand-written seeds on disk for
+#: 25 hours while its in-memory table had hundreds (found during M4.4.1).
+knownNodesDirty = False
+
+
 def saveKnownNodes(dirName=None):
     """Save knownnodes to filesystem"""
     if dirName is None:
         dirName = state.appdata
+    global knownNodesDirty
     with knownNodesLock:
         with open(os.path.join(dirName, 'knownnodes.dat'), 'w') as output:
             json_serialize_knownnodes(output)
+        knownNodesDirty = False
 
 
 def addKnownNode(stream, peer, lastseen=None, is_self=False):
@@ -124,6 +133,7 @@ def addKnownNode(stream, peer, lastseen=None, is_self=False):
     Returns True if added a new node.
     """
     # pylint: disable=too-many-branches
+    global knownNodesDirty
     if isinstance(stream, Iterable):
         with knownNodesLock:
             for s in stream:
@@ -140,6 +150,7 @@ def addKnownNode(stream, peer, lastseen=None, is_self=False):
             info = knownNodes[stream].get(peer)
             if lastseen > info['lastseen']:
                 info['lastseen'] = lastseen
+                knownNodesDirty = True
         except (KeyError, TypeError):
             pass
         else:
@@ -155,6 +166,7 @@ def addKnownNode(stream, peer, lastseen=None, is_self=False):
         'rating': rating or 1 if is_self else 0,
         'self': is_self,
     }
+    knownNodesDirty = True
     return True
 
 
@@ -254,7 +266,7 @@ def cleanupKnownNodes(pool):
     """
     Cleanup knownnodes: remove old nodes and nodes with low rating
     """
-    global knownNodesActual
+    global knownNodesActual, knownNodesDirty
     now = int(time.time())
     needToWriteKnownNodesToDisk = False
 
@@ -287,5 +299,5 @@ def cleanupKnownNodes(pool):
 
     # Let us write out the knowNodes to disk
     # if there is anything new to write out.
-    if needToWriteKnownNodesToDisk:
+    if needToWriteKnownNodesToDisk or knownNodesDirty:
         saveKnownNodes()
