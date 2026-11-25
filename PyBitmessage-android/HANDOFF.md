@@ -317,6 +317,47 @@ App 不崩、收发照常，只是没有通知——**这是通过标准之一�
 
 ---
 
+## 6.0k ⏸ 2026-11-25 21:40：收工点（今日开发结束）
+
+### 今天最后落定的：连接数为 0 是真 bug，已修并设备验证
+
+| 项 | 结果 |
+|---|---|
+| 根因 | **TLS 升级卡死**：只要对端 advertise `NODE_SSL` 就必然尝试 2013 年的客户端 TLS 配置，握手永不完成 → `fullyEstablished` 永远 False → `networkConnections=0`（EVIDENCE §1.63） |
+| 修复 | TLS 默认关闭（`BITMESSAGE_ENABLE_TLS=1` 可开）、TLS 握手 20s 超时、`process()` 跟进状态移交（commit `c54acea`） |
+| 设备验证 | 平板 `networkConnections` **0 → 1→2**、`TCP established` **16**、`tls_init` **0**、自发消息 **`ackreceived`**、收件箱 16→17（EVIDENCE §1.64） |
+| 发布页 | `v0.6.3.2` 资产已更新，sha256 `1f496353…186d`；本地 `~/Documents/pybitmessage-apk/pybitmessage-0.6.3.2-m4810-2026-11-25.apk` |
+
+**发送失败**已定性为"连接数为 0 的下游后果"，不是独立故障。
+
+### 用户明确的下一个需求：收件箱邮件可删除
+
+已立项 **M7**（`MILESTONES.md` §6.9），拆成 4 步，**后端全都有、只缺界面**：
+
+- `helper_inbox.trash()/undeleteMessage()/delete()` 已实现
+- `api.py` 有 `trashMessage` / `trashInboxMessage` / `deleteAndVacuum`
+- 缺的是：主界面 `inbox()` 的 SQL **没带 `msgid`**；回收站页只读
+- 顺序：M7.1.1 带 msgid → M7.1.2 软删+确认 → M7.1.3 回收站恢复/彻底删 → M7.1.4 中文化+扫描
+- **坑**：`msgid` 是 `blob`（bytes），Kivy 里别当 `str`；`mail_list.load_folder()` 的行同样缺 msgid
+
+### 明天开工建议顺序
+
+1. **M7.1.1–M7.1.4**（用户点名要的，后端已就绪，预计 5h）
+2. **M4.8.11**：连接数 0↔2 抖动、出站半开 50+（maxout=8）、`numberOfMessagesProcessed` 长期 0（EVIDENCE §1.64）
+3. **M6.5**：删 payment/credits 死代码
+4. **G4（用户要求最后做）**：D5 锁屏 30 分钟、C3 电量
+
+### 平板当前状态
+
+```
+包     : run 45620481903（含 TLS 修复 + 日志 + 抽屉分享），零热补丁
+连接   : 0↔2 抖动（M4.8.11）
+收件箱 : 17 条
+备份   : /tmp/bk_m67/（keys 1992B、vault 60B、messages 11.5MB、knownnodes 203KB 均已校验非 0）
+```
+
+---
+
 ## 6.0j ⏸ 2026-11-25 17:00：暂停点（用户回家路上，无网络；**代码已改完，未验证**）
 
 ### 这一轮改了什么（commit `6663bc2`，已 push，CI 会出包）

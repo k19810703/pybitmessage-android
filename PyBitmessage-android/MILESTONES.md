@@ -295,6 +295,8 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |
 | M4.7.1 | 电量策略（仅 Wi-Fi/充电同步） | 设置项 + 网络策略 | 4h | **T**：1 小时后台耗电 ≤ 8%（C3） |
 
+| **M7.1** 🔴 | **收件箱邮件可删除**（用户 2026-11-25 提出） | 主界面收件箱只能看，不能删；抽屉里的「回收站」只有列表、没有操作 | 主界面每行加删除（软删进回收站）；回收站支持「恢复」「彻底删除」 | **S**：点删除后该行立刻消失、重启后仍不在；回收站能看到并可恢复；彻底删除后 `messages.dat` 里查不到；**F**：`folder` 由 `inbox` 变 `trash` | M7 | **高（用户需求）** |
+
 | **M4.8.11** | 连接数 0↔2 抖动、出站半开连接堆到 50+（maxout=8）、对象收到却不处理 | `[DIAG]`：outbound=43–56 常年高于 maxout；`numberOfMessagesProcessed` 长期 0 而 `recv object` 有 10 | 查 `connectionpool.loop()` 的 spawn/回收条件与 M4.8.4 的计数来源 | **A**：`networkConnections` 稳定 ≥2 十分钟；**A**：`numberOfMessagesProcessed` 随 `recv object` 增长 | M4.8 | 高 |
 
 | **M4.8.10** ✅ | 连接数恒为 0（协议握手完成但从未 established） | `networkConnections=0`，日志里 `sent verack` 数十次、`TCP established` 为 0 | TLS 升级默认关闭 + 握手 20s 超时 + `process()` 跟进状态移交 | **A**：`networkConnections ≥ 1`；**L**：出现 `TCP established` | M4.8 | **高（用户报告）** |
@@ -303,6 +305,34 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | | | | | **设备验收通过**（EVIDENCE §1.62）：日志 8 KB 含 PROBE；点「日志」→ zip 落到 `Download/PyBitmessage/` → 微信聊天界面；zip 含 meta/日志/tail。9 条单测 |
 
 | **M6.5** | 删除上游遗留的 payment/credits 死代码 | 抽屉入口已在 M6.2.1 移除，但 `kv/payment.kv`、`kv/credits.kv`、`baseclass/payment.py` 仍在树里（15 处英文） | 删除文件与 `screens_data.json` 的 Payment 条目 | **F**：`grep -r payment src/bitmessagekivy` 无结果；扫描器不再需要 `DEAD_SCREENS` 例外 | M6 | 低 |
+
+### 6.9 M7 · 收件箱消息管理（2026-11-25 新增，用户需求）
+
+> **背景**：用户实际使用时说"我需要收件箱的邮件可以删除"。现在主界面收件箱只有展示，
+> 抽屉里的「回收站」也只读。**后端其实全都有**，缺的只是界面。
+
+**已有底座（不用重写）**
+
+| 层 | 现成的 |
+|---|---|
+| `helper_inbox.py` | `trash(msgid)` 软删（把 `folder` 改成 `trash`，并发 UI 信号）、`undeleteMessage(msgid)` 恢复、`delete(ack_data)` 彻底删 |
+| `api.py` | `trashMessage` / `trashInboxMessage` / `deleteAndVacuum` 三条命令 |
+| `mail_list.load_folder()` | 已能按 `folder IN ('inbox','trash')` 查，回收站页面已在用它渲染 |
+| 主界面 `messaging.inbox()` | **只查了** `fromaddress, subject, message, received` —— **没有带 `msgid`**，这是要改的第一处 |
+
+**任务拆分**
+
+| ID | 任务 | 做法 | 验收 | 预估 |
+|---|---|---|---|---|
+| M7.1.1 | 主界面收件箱带 `msgid` | `inbox()` 的 SQL 加 `msgid`，返回值多一项；`refresh_inbox()` 每行挂一个「删除」按钮 | **S**：列表照常显示；点删除后行消失 | 1.5h |
+| M7.1.2 | 软删除 + 确认 | 调用 `helper_inbox.trash(msgid)`；删前弹二次确认（`MDDialog`，与现有弹窗风格一致），防误触 | **F**：`SELECT folder FROM inbox WHERE msgid=?` → `trash`；**S**：重启后仍不在收件箱 | 1h |
+| M7.1.3 | 回收站可操作 | 抽屉「回收站」页每行加「恢复」`undeleteMessage` /「彻底删除」`delete` | **S**：恢复后回收件箱；彻底删除后两处都没有 | 2h |
+| M7.1.4 | 中文化 + 扫描 | 新增文案进字典；`scan-english.py --strict` 仍通过 | **F**：扫描 0 处 | 0.5h |
+
+**顺序**：M7.1.1 → M7.1.2 → M7.1.3 → M7.1.4，一次只做一个（沿用 M4.1 的拆法）。
+
+**风险**：`msgid` 是 `blob`（bytes），Kivy 别把它当 `str` 用；按钮回调里传 bytes 给 SQL 才匹配得上。
+另外回收站页面用的是 `mail_list.load_folder()`，那边的行里**也没有 msgid**，同样要补。
 
 ### 7.0 M4.8 · 已观测缺陷收编（2026-11-20 新增）
 
