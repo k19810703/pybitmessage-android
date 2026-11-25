@@ -295,6 +295,8 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |
 | M4.7.1 | 电量策略（仅 Wi-Fi/充电同步） | 设置项 + 网络策略 | 4h | **T**：1 小时后台耗电 ≤ 8%（C3） |
 
+| **M4.8.11** | 连接数 0↔2 抖动、出站半开连接堆到 50+（maxout=8）、对象收到却不处理 | `[DIAG]`：outbound=43–56 常年高于 maxout；`numberOfMessagesProcessed` 长期 0 而 `recv object` 有 10 | 查 `connectionpool.loop()` 的 spawn/回收条件与 M4.8.4 的计数来源 | **A**：`networkConnections` 稳定 ≥2 十分钟；**A**：`numberOfMessagesProcessed` 随 `recv object` 增长 | M4.8 | 高 |
+
 | **M4.8.10** ✅ | 连接数恒为 0（协议握手完成但从未 established） | `networkConnections=0`，日志里 `sent verack` 数十次、`TCP established` 为 0 | TLS 升级默认关闭 + 握手 20s 超时 + `process()` 跟进状态移交 | **A**：`networkConnections ≥ 1`；**L**：出现 `TCP established` | M4.8 | **高（用户报告）** |
 
 | **M6.6** ✅ | 设备端诊断日志（3 天轮转）+ 一键分享 | 用户装了包但收不到消息、没有 adb，需要能自己把证据发出来 | `src/applog.py`：tee stdout/stderr 到 `logs/app-YYYYMMDD.log`、保留 3 天、单日 8MB 上限、异常全栈；`share_archive()` 用 MediaStore 导出 zip 并调系统分享（不依赖 FileProvider/清单） | **S**：主界面「日志」按钮 → 分享面板；zip 含 meta + 3 天日志 + tail | M6 | **高（用户提出）** |
