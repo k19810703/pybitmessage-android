@@ -591,6 +591,48 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.62 ✅ M6.6 设备端诊断日志（3 天轮转）+ 一键分享（2026-11-25 16:50）
+
+**需求来源**：用户把包发给别人装，对方"收不到消息"；对方没有 adb、看不到 logcat，
+现有诊断全在 `print()` 里，手机上是黑盒。
+
+**实现（`src/applog.py`，新增）**
+
+| 要点 | 做法 |
+|---|---|
+| 收集 | `install()` 把 `sys.stdout`/`sys.stderr` 换成 tee，**同时**写 `logs/app-YYYYMMDD.log`。这样**已有全部诊断**（PROBE、BMPROTO、INVTHREAD、PROCMSG 解密/验签、KEYSTORE、NOTIFY、KEEPALIVE）零改动进文件 |
+| 轮转 | 每天一个文件，保留 **3 天**（启动 + 跨天时清理更早的）；单日上限 8 MB，超了写提示后停写 |
+| 异常 | 主线程 + **任意工作线程**的未捕获异常都带完整堆栈落盘 |
+| 启动顺序 | `probe_environment()` 从 import 期挪到 `main()` 里、日志就绪之后，所以 PROBE 环境矩阵也在文件里 |
+| 分享 | 打 zip（`meta.txt` + 3 天日志 + `tail-400.txt`）→ **MediaStore 写入 `Download/PyBitmessage/`** → 系统分享面板（微信/邮件/文件管理器）。不用 FileProvider，**不改清单、不加 androidx 依赖**，构建风险为零；下载目录还留了一份可手动发 |
+| 兜底 | 分享失败时把最后 400 行**复制到剪贴板** |
+
+**设备实测（平板，Android 13）**
+
+| 项 | 结果 |
+|---|---|
+| 日志文件 | ✅ `files/bitmessage/logs/app-20261125.log`，8 KB，含 meta + PROBE 全绿行 |
+| 「日志」按钮 | ✅ 主界面右上（复制旁边） |
+| 分享 | ✅ 状态栏「日志已导出到 Download/PyBitmessage 并打开分享」，随后前台变成 **`com.tencent.mm` 微信聊天界面** |
+| 落盘 | ✅ `/sdcard/Download/PyBitmessage/pybitmessage-logs-*.zip`（6.2 KB） |
+| zip 内容 | ✅ `meta.txt`（Xiaomi / 21051182C / SDK 33 / Android 13 / 2 个地址 / 连接数）、`app-20261125.log`、`tail-400.txt` |
+
+**设备上连踩三个 jnius 坑（都在真机才显形）**
+
+| # | 报错 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | `AttributeError: 'android.os.Build' has no attribute 'VERSION'` | **嵌套类**在 jnius 里必须写成 `Build$VERSION` | `autoclass('android.os.Build$VERSION')` |
+| 2 | 同上 → `MediaStore has no attribute 'MediaColumns'` | 同样嵌套类 | `autoclass('android.provider.MediaStore$MediaColumns')` |
+| 3 | `No methods called put matching your arguments (String, Boolean)` | `ContentValues.put` 重载多，Python `int` 被推测成 Boolean | 干脆不写 `IS_PENDING`（只留三个 String 字段），发布窗口毫秒级、半成品 zip 无害 |
+| 4 | `Invalid instance of 'android/net/Uri' passed for 'java/lang/String'` | `putExtra(String, …)` 重载解析错 | `cast(Parcelable, uri)` |
+
+**测试**：`tests/test_applog.py` 9 条（tee 进文件、重复 install 不套两层、3 天保留、
+单日上限、zip 内容、无日志兜底、非安卓报错）。全套 **43 条通过**。
+
+> **审查没发现、只有冒烟测试抓到的 bug**：`_write()` 里给模块全局赋值却没声明 `global`，
+> 于是它变成局部变量，读取时 `UnboundLocalError`，又被 `except: pass` 吞掉——**一行日志都写不进去**，
+> 而代码读起来完全正常。已在函数里写明注释，测试注释也记了这件事。
+
 ### 1.61 ◐ M6.3.2 响应式布局 + M6.2 全界面中文 + M6.4.3 残留扫描（2026-11-25 14:15）
 
 **验证方式**：本轮的 UI 改动全部是纯 Python / `.kv`，用热补丁在平板上逐项验证；
