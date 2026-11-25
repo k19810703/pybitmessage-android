@@ -7,7 +7,7 @@
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 26 MB | `5d3fd7b0ec8e54042fb3d0d6fbfc598c6b9053f8d97d4c6b6d117d7949e128c9` |
+| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 28 MB | `10f7b7ef0209acadeeb5f76f922a0a27643587aba33a3e414345141e4b0b82c9` |
 
 校验：
 
@@ -57,6 +57,8 @@ adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.vault > ke
 | 中文界面（主界面 / 收件箱 / 已发送 / 草稿 / 回收站 / 全部邮件） | ✅ 部分页面仍有英文 |
 | 前台服务保活 + WakeLock | ✅ |
 | 新消息系统通知（含中文主题） | ✅ |
+| 自己的启动图（不再是 Kivy 风筝） | ✅ |
+| 地址簿 / 订阅 / 黑白名单 API 可用（非空时不崩） | ✅ |
 | Android 13 通知权限运行时申请 | ✅ |
 | 私钥加密（Android Keystore 包裹，`keys.dat` 为密文） | ✅ |
 | 中文应用图标 | ✅ |
@@ -64,6 +66,7 @@ adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.vault > ke
 ## 已知限制
 
 - **锁屏 30 分钟仍能收消息（D5）尚未验收** —— 演示时请保持亮屏
+  （D1–D4、D6、D7 已全绿，见 `EVIDENCE.md` §1.59）
 - 私钥加密依赖设备 Keystore；换机 = 换身份，必须同时迁移 `keys.dat` + `keys.vault`
 - 消息经 P2P 网络转发，**不是即时通讯**：首次给新地址发消息 1–5 分钟，正常送达 23 秒–3 分钟
 - 部分页面仍是英文（搜索框提示、个别设置项）

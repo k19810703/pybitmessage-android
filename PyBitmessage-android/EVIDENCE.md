@@ -591,6 +591,46 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.59 ✅ M5.4.1 回归 D1–D7（D5 按约定跳过）（2026-11-25 11:45）
+
+**结果（`artifacts/regression-d1d7.md`，原始日志 `artifacts/regression-run.log`）**
+
+| # | 结果 | 数据 |
+|---|---|---|
+| D1 | ✅ | A=`BM-2cXVvaPP…`（Mac 节点）B=`BM-2cXrm…`（平板） |
+| D2 | ✅ | B 的通讯录 4 条，含 A |
+| D3 | ✅ | B→A 主题 `REG-B2A-1795577984`，**130 秒**送达 |
+| D4 | ✅ | A→B 主题 `REG-A2B-1795578114`，**30 秒**送达 |
+| D5 | ⏭ | 用户明确要求最后做，本轮不验（不计入通过） |
+| D6 | ✅ | force-stop 重启前后完全一致：2 个地址 / 16 条收件箱 / 4 条通讯录 |
+| D7 | ✅ | logcat 中 `FATAL / Traceback / THREAD-CRASH` **0 条** |
+
+复现：
+
+```bash
+adb -s b45f8e87 forward tcp:8445 tcp:8442
+python3 scripts/regression-d1-d7.py --connect-timeout 600 --node-retries 4
+```
+
+**这轮修正的 4 个"测试脚本自身的 bug"**（都不是产品问题，但都制造过假结论）：
+
+| # | 症状 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | D1 报 A 无地址 | **headless 节点根本不会创建首个地址**（只有 Qt GUI 会） | 脚本调用 `createRandomAddress`（同样要 base64 参数） |
+| 2 | D2 `Fault 17: not valid UTF-8` | API 参数顺序是 `addAddressBookEntry(address, label_b64)` | 调换参数 |
+| 3 | D3 `Fault 13: fromAddress not in keys.dat` | 参数顺序是 `sendMessage(toAddress, fromAddress, …)` | 调换参数 |
+| 4 | **D3/D4 报"480s 未到达"，实际 130s/30s 就到了** | 主题经 `xmlrpc.client.Binary` 返回，`bytes(Binary)` 抛异常，而 `wait_for_subject` 用 `except: pass` 把异常吞了 → 每次轮询都在崩 | `Binary.data`；并把轮询异常打印一次而不是静默 |
+
+> 教训写在这里：**测试脚本里的 `except: pass` 会伪造"产品失败"**。这次差点据此判定消息功能坏了。
+
+**A 节点上线的稳定性**：同一出口 IP 常常整轮都被
+`Too many connections from your IP` 拒绝（这个现象在 11-24 两次运行里都出现，
+其中一次 A 0 条连接）。脚本改为**换新节点重试**（`--node-retries`，每次换新地址与新的
+节点抽签），本轮第 1 次尝试就拿到连接。
+
+**产物更新**：`v0.6.3.2` 发布页的 APK 已替换为含 API 修复的构建
+（`sha256 10f7b7ef0209acad…b82c9`，28 MB）；`RELEASE.md` / `SHA256SUMS` 同步。
+
 ### 1.58 ◐ M5.1.1 启动图 + M5.4.1 首轮回归（2026-11-24 17:10，暂停于此）
 
 **启动图（用户反馈"启动有个 logo 没改、黑底不好看"）**

@@ -189,42 +189,65 @@ def inbox(port):
     return api(port).getAllInboxMessages()['inboxMessages']
 
 
+def _api_text(value):
+    """Decode a text field as returned by the XML-RPC API.
+
+    The API ships user text base64-encoded, but the wrapper varies: a plain
+    ``str`` on some calls, an ``xmlrpc.client.Binary`` on others. Treating a
+    Binary as already-decoded text is what made D3 report a false failure on
+    2026-11-25 -- the message had arrived, only the comparison was wrong.
+    """
+    if isinstance(value, xmlrpc.client.Binary):
+        value = value.data          # bytes(Binary) raises on this Python
+    if isinstance(value, (bytes, bytearray)):
+        value = bytes(value).decode('ascii', 'replace')
+    if not isinstance(value, str):
+        return str(value)
+    try:
+        decoded = base64.b64decode(value.encode('ascii'), validate=True)
+    except Exception:  # noqa: BLE001 - not base64, keep as-is
+        return value
+    try:
+        return decoded.decode('utf-8')
+    except UnicodeDecodeError:
+        return value
+
+
 def subjects(port):
-    out = set()
-    for msg in inbox(port):
-        subject = msg.get('subject')
-        if isinstance(subject, xmlrpc.client.Binary):
-            subject = bytes(subject)
-        if isinstance(subject, bytes):
-            subject = subject.decode('utf-8', 'replace')
-        elif isinstance(subject, str):
-            try:
-                subject = base64.b64decode(subject).decode('utf-8', 'replace')
-            except Exception:  # noqa: BLE001
-                pass
-        out.add(str(subject))
-    return out
+    return {_api_text(msg.get('subject')) for msg in inbox(port)}
 
 
 def wait_for_subject(port, needle, timeout, label):
-    """Poll an inbox until a subject contains *needle*; return seconds taken."""
+    """Poll an inbox until a subject contains *needle*; return seconds taken.
+
+    Errors are reported once instead of being swallowed: on 2026-11-25 a
+    decoder bug inside ``subjects()`` made every poll raise, the ``except``
+    hid it, and D3/D4 were reported as "message never arrived" when both
+    messages had in fact been delivered.
+    """
     started = time.time()
+    reported = False
     while time.time() - started < timeout:
         try:
             for subject in subjects(port):
                 if needle in subject:
                     return time.time() - started
-        except Exception:  # noqa: BLE001 - API may hiccup mid-poll
-            pass
+            reported = False
+        except Exception as exc:  # noqa: BLE001 - API may hiccup mid-poll
+            if not reported:
+                print('  %s 轮询出错（会继续重试）: %r' % (label, exc),
+                      flush=True)
+                reported = True
         time.sleep(5)
     return None
 
 
-def start_mac_node(home, api_port):
+def start_mac_node(home, api_port, maxout=2):
     log = open(os.path.join(home, 'node.log'), 'w')
     proc = subprocess.Popen(
         [sys.executable, '-u', os.path.join(HERE, 'pubnet_node.py'),
-         '--home', home, '--api-port', str(api_port)],
+         '--home', home, '--api-port', str(api_port),
+         '--maxout', str(maxout)],
         stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ))
     return proc, log
 
@@ -239,25 +262,57 @@ def run(args):
     mac = args.mac_port
 
     print('== 启动 Mac 节点（A）', flush=True)
-    home = tempfile.mkdtemp(prefix='regress-a-')
-    proc, log = start_mac_node(home, mac)
     keep = args.keep_node
+    proc = log = home = None
+    addrs_a = []
     try:
-        if not wait_for_api(mac, 120, 'A(Mac)'):
-            report.add('D1', '两台设备各有地址', 'FAIL', 'A 节点没起来')
-            return report
         if not wait_for_api(tablet, 60, 'B(平板)'):
             report.add('D1', '两台设备各有地址', 'FAIL',
                        '平板 API 不可达（adb forward 8445 是否还在？）')
             return report
 
-        # ---- D1: both sides have an address ------------------------------
-        addrs_a = ensure_address(mac, 300, 'A(Mac)', 'regression-A')
+        # A needs at least one established peer to do anything: without one it
+        # can neither publish its pubkey nor receive. Our egress IP is shared,
+        # so a given node instance often gets "Too many connections from your
+        # IP" for its whole life -- a fresh instance with a new address and new
+        # peer draws usually gets through. Retry a few times before giving up.
+        per_attempt = max(120, args.connect_timeout // max(1, args.node_retries))
+        for attempt in range(1, args.node_retries + 1):
+            home = tempfile.mkdtemp(prefix='regress-a-')
+            proc, log = start_mac_node(home, mac, args.node_maxout)
+            print('  尝试 %d/%d：home=%s' % (attempt, args.node_retries, home),
+                  flush=True)
+            if not wait_for_api(mac, 120, 'A(Mac)'):
+                print('  A 没起来，重试', flush=True)
+            else:
+                addrs_a = ensure_address(mac, 240, 'A(Mac)', 'regression-A')
+                if addrs_a and wait_for_connections(
+                        mac, 1, per_attempt, 'A(Mac)') >= 1:
+                    print('  A 已上线（第 %d 次尝试）' % attempt, flush=True)
+                    break
+                addrs_a = []
+            if attempt < args.node_retries:
+                proc.terminate()
+                try:
+                    proc.wait(15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                log.close()
+                proc = log = None
+                shutil.rmtree(home, ignore_errors=True)
+                time.sleep(10)
+
         addrs_b = ensure_address(tablet, 60, 'B(平板)')
         if not addrs_a or not addrs_b:
-            report.add('D1', '两台设备各生成地址', 'FAIL',
-                       'A=%d 个地址，B=%d 个地址' % (len(addrs_a), len(addrs_b)))
+            detail = ('A=%d 个地址，B=%d 个地址' % (len(addrs_a), len(addrs_b)))
+            if addrs_b and not addrs_a:
+                detail += ('；A 连续 %d 次都没能建立公网连接'
+                           '（出口 IP 被节点以 Too many connections 拒绝）'
+                           % args.node_retries)
+            report.add('D1', '两台设备各生成地址', 'FAIL', detail)
             return report
+
+        # ---- D1: both sides have an address ------------------------------
         addr_a = addrs_a[0]
         report.add('D1', '两台设备各生成地址', 'PASS',
                    'A=%s  B=%s' % (short(addr_a), short(addrs_b[0])))
@@ -380,6 +435,14 @@ def main():
     parser.add_argument('--mac-port', type=int, default=8451)
     parser.add_argument('--send-timeout', type=int, default=480,
                         help='seconds to wait for one message (default 480)')
+    parser.add_argument('--connect-timeout', type=int, default=420,
+                        help='seconds to wait for A to join the network '
+                             '(it needs one established peer to do anything)')
+    parser.add_argument('--node-retries', type=int, default=3,
+                        help='restart the Mac node this many times if it '
+                             'cannot get a single peer connection')
+    parser.add_argument('--node-maxout', type=int, default=2,
+                        help='outbound connections for the Mac node')
     parser.add_argument('--skip-send', action='store_true')
     parser.add_argument('--no-restart', action='store_true',
                         help='skip D6/D7, which force-stop the app '
