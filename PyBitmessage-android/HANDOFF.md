@@ -317,6 +317,54 @@ App 不崩、收发照常，只是没有通知——**这是通过标准之一�
 
 ---
 
+## 6.0i ⏸ 2026-11-25 14:20：M6 推进中（接设备后第一件事是装包）
+
+### 一口气要做的事（设备一插上）
+
+```bash
+ADB=~/Documents/platform-tools/adb
+PKG=at.bitmessage.pybitmessage
+# 1) 备份并校验大小（拔线会让 exec-out cat 留下 0 字节文件）
+$ADB -s b45f8e87 exec-out run-as $PKG cat files/bitmessage/keys.dat > /tmp/keys.bak
+ls -l /tmp/keys.bak     # 必须非 0！
+# 2) 装含 M6 的包（已构建、已重签）
+$ADB -s b45f8e87 push /tmp/pybitmessage-m62-2026-11-25.apk /data/local/tmp/bm.apk
+$ADB -s b45f8e87 shell pm install -r -d /data/local/tmp/bm.apk
+# 3) 清掉 5 个热补丁（整个 bitmessagekivy 覆盖层直接删）
+$ADB -s b45f8e87 shell "run-as $PKG rm -rf files/app/bitmessagekivy"
+# 4) 验证：两栏横屏 / 设置页全中文 / 抽屉无「付费方案」
+```
+
+### 本轮（M6）已完成并验证的
+
+| 任务 | 状态 |
+|---|---|
+| M6.3.2 响应式两栏 | ✅ 热补丁验证（平板横屏两栏、竖屏单栏） |
+| M6.2.1 全界面中文 | ✅ 可达界面 0 处英文；顺带移除「付费方案」入口 |
+| M6.2.3 豆腐块 | ✅ 根因是 MD 组件忽略 `font_name`；把 CJK 注册成 `Roboto` 解决（截断复检未做） |
+| M6.4.3 残留扫描 | ✅ `scripts/scan-english.py --strict` 退出码 0 |
+| M6.5（新） | ⬜ 删除 payment/credits 死代码（入口已移除，文件还在） |
+
+### 平板当前真实状态（**注意**）
+
+```
+包      : 上一版（run 45551686340），**不含** M6 的 UI 改动
+热补丁  : 5 个 —— bitmessagekivy/{messaging.py, mpybit.py, kv/chat.kv,
+          kv/popup.kv, kv/login.kv, kv/settings.kv}（实际 6 个文件）
+数据    : 未动（本轮没装包，只是热补丁）
+待装包  : /tmp/pybitmessage-m62-2026-11-25.apk（run 45557518551）
+```
+
+### 其余待办（优先级）
+
+1. **装 M6 包 + 清热补丁**（上面那段）
+2. M6.5 删除 payment/credits 死代码（15 处英文，纯清理）
+3. M6.2.3 逐屏截断复检、M6.3.3 字号缩放、M6.3.4 平板 AVD
+4. **G4 闸门（用户要求最后做）**：D5 锁屏 30 分钟、C3 电量 ≤8%/h（M4.7.1）
+5. M4.8.4 计数失真、M4.8.5 `doingmsgpow` 偶发卡顿
+
+---
+
 ## 6.0h ✅ 2026-11-25 11:50：M5 收口（新 session 从这里开始）
 
 ### M5 完成情况
