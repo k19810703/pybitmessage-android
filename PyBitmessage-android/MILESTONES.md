@@ -295,6 +295,8 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |
 | M4.7.1 | 电量策略（仅 Wi-Fi/充电同步） | 设置项 + 网络策略 | 4h | **T**：1 小时后台耗电 ≤ 8%（C3） |
 
+| **M6.6** ✅ | 设备端诊断日志（3 天轮转）+ 一键分享 | 用户装了包但收不到消息、没有 adb，需要能自己把证据发出来 | `src/applog.py`：tee stdout/stderr 到 `logs/app-YYYYMMDD.log`、保留 3 天、单日 8MB 上限、异常全栈；`share_archive()` 用 MediaStore 导出 zip 并调系统分享（不依赖 FileProvider/清单） | **S**：主界面「日志」按钮 → 分享面板；zip 含 meta + 3 天日志 + tail | M6 | **高（用户提出）** |
+
 | **M6.5** | 删除上游遗留的 payment/credits 死代码 | 抽屉入口已在 M6.2.1 移除，但 `kv/payment.kv`、`kv/credits.kv`、`baseclass/payment.py` 仍在树里（15 处英文） | 删除文件与 `screens_data.json` 的 Payment 条目 | **F**：`grep -r payment src/bitmessagekivy` 无结果；扫描器不再需要 `DEAD_SCREENS` 例外 | M6 | 低 |
 
 ### 7.0 M4.8 · 已观测缺陷收编（2026-11-20 新增）
