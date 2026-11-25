@@ -164,8 +164,12 @@ class MessagingScreen(Screen):
         copy_btn = Button(text='复制', font_name=FONT, font_size=dp(13),
                           size_hint=(None, 1), width=dp(64))
         copy_btn.bind(on_release=lambda *_: self._copy_address())
+        self.log_btn = Button(text='日志', font_name=FONT, font_size=dp(13),
+                              size_hint=(None, 1), width=dp(64))
+        self.log_btn.bind(on_release=lambda *_: self._share_logs())
         self.header.add_widget(self.addr_label)
         self.header.add_widget(copy_btn)
+        self.header.add_widget(self.log_btn)
 
         # inbox
         self.inbox_group = BoxLayout(orientation='vertical', spacing=dp(4))
@@ -270,6 +274,26 @@ class MessagingScreen(Screen):
             Clipboard.copy(addr)
             self._set_status('地址已复制')
 
+    def _share_logs(self):
+        """把打包好的诊断日志交给系统分享（微信/邮件/文件管理器）。"""
+        self._set_status('正在打包日志…')
+        try:
+            import applog
+            # idempotent: main.py installs it at startup, but a hot-patched
+            # session (or a share tapped very early) may not have it yet.
+            applog.install()
+        except Exception as exc:  # noqa: BLE001
+            self._set_status('日志模块不可用：%s' % exc)
+            return
+
+        ok, message = applog.share_archive()
+        if not ok:
+            # 分享失败时退一步：至少把尾部日志复制到剪贴板
+            copied, copy_msg = applog.copy_recent_to_clipboard()
+            self._set_status('%s；%s' % (message, copy_msg if copied else ''))
+            return
+        self._set_status(message)
+
     def _set_status(self, text):
         self.status.text = text
 
@@ -289,8 +313,12 @@ class MessagingScreen(Screen):
             try:
                 send_message(to_addr, body)
             except Exception as exc:  # noqa: BLE001
+                # Bind the text now: `exc` is deleted when the except block
+                # ends, so a lambda that closed over it would raise NameError
+                # instead of showing the reason.
+                text = '发送失败：%s' % exc
                 Clock.schedule_once(
-                    lambda *_: self._after_send('发送失败：%s' % exc), 0)
+                    lambda *_: self._after_send(text), 0)
                 return
             Clock.schedule_once(
                 lambda *_: self._after_send('已提交，正在广播…'), 0)

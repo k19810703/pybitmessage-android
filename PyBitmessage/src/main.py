@@ -39,8 +39,6 @@ def _install_thread_excepthook():
 
 _install_thread_excepthook()
 
-probe_environment()
-
 
 
 def prepare_home():
@@ -247,6 +245,19 @@ def main():
 
     import state
     import bitmessagemain
+
+    # Diagnostic log file (3-day retention) *before* anything interesting
+    # happens: from here on every print() -- PROBE matrix, handshake, inv,
+    # decrypt, notifications -- also lands in a file the user can share.
+    try:
+        import applog
+        applog.install()
+    except Exception as exc:  # noqa: BLE001 - never block startup
+        print('APPLOG install failed: %r' % (exc,), flush=True)
+
+    # Runs now (not at import time) so the PROBE lines are captured in the log
+    # file above; they are the first thing a supporter needs to see.
+    probe_environment()
 
     # Diagnostic switch; must run after debug.py configured logging.
     if os.environ.get('BITMESSAGE_LOG_DEBUG'):
