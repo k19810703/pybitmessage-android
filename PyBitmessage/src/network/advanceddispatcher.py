@@ -73,9 +73,14 @@ class AdvancedDispatcher(asyncore.dispatcher):
                 else:
                     del self.read_buf[0:length]
 
+    #: How many state hand-overs one process() call may follow. The bound only
+    #: exists so a pathological pair of handlers cannot spin forever.
+    _MAX_STATE_TRANSITIONS = 8
+
     def process(self):
         """Process (parse) data that's in the buffer,
         as long as there is enough data and the connection is open."""
+        transitions = 0
         while self.connected and not state.shutdown:
             try:
                 with nonBlocking(self.processingLock):
@@ -83,6 +88,7 @@ class AdvancedDispatcher(asyncore.dispatcher):
                         break
                     if len(self.read_buf) < self.expectBytes:
                         return False
+                    previous_state = self.state
                     try:
                         cmd = getattr(self, "state_" + str(self.state))
                     except AttributeError:
@@ -90,6 +96,28 @@ class AdvancedDispatcher(asyncore.dispatcher):
                             'Unknown state %s', self.state, exc_info=True)
                         raise UnknownStateError(self.state)
                     if not cmd():
+                        # A handler returns False either because it needs more
+                        # bytes, or because it handed the connection over to a
+                        # new state (set_state + return False).
+                        #
+                        # In the second case nobody used to run the new state
+                        # until the *peer* sent something. When the last step of
+                        # the handshake switches to connection_fully_established
+                        # and the peer is waiting for our verack, both sides sit
+                        # there forever: fullyEstablished never becomes True, so
+                        # clientStatus reports networkConnections=0 while the
+                        # wire handshake actually completed (the "0 connections"
+                        # symptom, M4.8.10). Follow the hand-over right away when
+                        # the new state needs no further bytes.
+                        if (
+                                self.state != previous_state
+                                and self.connected
+                                and not state.shutdown
+                                and len(self.read_buf) >= self.expectBytes
+                                and transitions < self._MAX_STATE_TRANSITIONS
+                        ):
+                            transitions += 1
+                            continue
                         break
             except BusyError:
                 return False

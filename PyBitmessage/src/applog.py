@@ -515,6 +515,13 @@ def copy_recent_to_clipboard():
 def reset_for_tests():  # pragma: no cover - helper for the test suite
     global _installed, _log_dir, _current_date, _current_handle
     global _truncated_notice_written
+    # Put the real streams back. Without this the tee survives into the next
+    # test and writes into whatever state.appdata happens to be then, leaving
+    # a surprise logs/ directory behind (it made an unrelated test fail).
+    if isinstance(sys.stdout, _Tee):
+        sys.stdout = sys.stdout._stream
+    if isinstance(sys.stderr, _Tee):
+        sys.stderr = sys.stderr._stream
     with _lock:
         if _current_handle is not None:
             try:

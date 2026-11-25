@@ -5,6 +5,7 @@ import logging
 import os
 import socket
 import ssl
+import time
 import sys
 
 import network.asyncore_pollchoose as asyncore
@@ -59,11 +60,14 @@ class TLSDispatcher(AdvancedDispatcher):
         self.tlsVersion = "N/A"
         self.isSSL = False
         self.sslSocket = None
+        #: Set when state_tls_init runs; used to give the upgrade a deadline.
+        self.tlsStartedAt = None
 
     def state_tls_init(self):
         """Prepare sockets for TLS handshake"""
         self.isSSL = True
         self.tlsStarted = True
+        self.tlsStartedAt = time.time()
         # Once the connection has been established,
         # it's safe to wrap the socket.
         if sys.version_info >= (2, 7, 9):
@@ -187,10 +191,25 @@ class TLSDispatcher(AdvancedDispatcher):
             self.close_reason = "SSL Error " + str(err) + " in handle_write"
             self.handle_close()
 
+    #: A TLS upgrade that has not finished by then is abandoned. Without this
+    #: the connection sits in tls_handshake until the idle reaper kills it, and
+    #: because fullyEstablished is never set it also never counts as a
+    #: connection (M4.8.10).
+    TLS_TIMEOUT_SECONDS = 20.0
+
     def tls_handshake(self):
         """Perform TLS handshake and handle its stages"""
         # wait for flush
         if self.write_buf:
+            return False
+        started = getattr(self, 'tlsStartedAt', None)
+        if started is not None and time.time() - started > self.TLS_TIMEOUT_SECONDS:
+            logger.info(
+                '%s:%i: TLS handshake did not finish in %.0fs, closing',
+                self.destination.host, self.destination.port,
+                self.TLS_TIMEOUT_SECONDS)
+            self.close_reason = "TLS handshake timeout"
+            self.handle_close()
             return False
         # Perform the handshake.
         try:

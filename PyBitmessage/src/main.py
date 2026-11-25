@@ -283,7 +283,16 @@ def main():
     # Plaintext peer links are allowed by the protocol; messages stay E2E
     # encrypted. Re-enable once the certs are generated at build time.
     # Allow the TLS upgrade: public peers may drop plaintext links.
-    state.disable_tls = os.environ.get('BITMESSAGE_DISABLE_TLS') == '1'
+    # TLS is OFF by default (M4.8.10). The upgrade is only attempted when the
+    # peer advertises NODE_SSL, and protocol.haveSSL(server=False) returns True
+    # unconditionally -- so every such peer pulls us into state_tls_init with
+    # our 2013-era client config (AECDH-AES256-SHA, secp256k1, TLS1.2 cap).
+    # Against today's nodes that handshake never completes: the connection sits
+    # in tls_handshake forever, fullyEstablished is never set and clientStatus
+    # reports networkConnections=0 even though version/verack succeeded.
+    # Peer links may be plaintext by design; message content is end-to-end
+    # encrypted either way. Set BITMESSAGE_ENABLE_TLS=1 to try TLS anyway.
+    state.disable_tls = os.environ.get('BITMESSAGE_ENABLE_TLS') != '1'
 
     # The C PoW library (libbitmsghash.so) makes protocol-default difficulty
     # fast enough (~4s per object), so do not lower it: public peers clamp the
