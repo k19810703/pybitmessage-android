@@ -208,6 +208,12 @@
                     divider: None
                     on_release: app.set_screen('myaddress')
                     on_release: root.parent.set_state()
+                NavigationItem:
+                    text: app.tr._('Share logs')
+                    icon: 'file-export'
+                    divider: None
+                    on_release: root.parent.set_state()
+                    on_release: app.share_logs()
 
 MDNavigationLayout:
     id: nav_layout

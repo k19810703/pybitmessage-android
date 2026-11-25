@@ -244,6 +244,7 @@ class Lang(BaseLanguage):
         'Demanded Difficulty': '要求的难度',
         'Max acceptable Difficulty': '可接受的最大难度',
         'Resends Expire': '重发截止',
+        'Share logs': '分享日志',
         'Namecoin Integration': 'Namecoin 集成',
         'please enter your text': '请输入内容',
         'To :': '收件人：',
@@ -370,6 +371,36 @@ class NavigateApp(MDApp):
         kivysignalthread.start()
         self.kivy_state_obj.kivyui_ready.set()
         super(NavigateApp, self).run()
+
+    def share_logs(self):
+        """把打包好的诊断日志交给系统分享（抽屉菜单 → 分享日志）。
+
+        Lives on the app (not on the messaging screen) so it is reachable from
+        every page -- the drawer is the only navigation that always exists.
+        """
+        try:
+            import applog
+            applog.install()          # idempotent; main.py already did it
+        except Exception as exc:      # noqa: BLE001
+            toast('日志模块不可用：%s' % exc)
+            return
+
+        # A snapshot right before sharing is worth more than the periodic one:
+        # it records what the user was seeing when they decided to report.
+        try:
+            import diag
+            diag.log_network('before share')
+        except Exception:             # noqa: BLE001
+            pass
+
+        try:
+            ok, message = applog.share_archive()
+        except Exception as exc:      # noqa: BLE001
+            ok, message = False, '分享失败：%r' % (exc,)
+        if not ok:
+            copied, copy_msg = applog.copy_recent_to_clipboard()
+            message = '%s；%s' % (message, copy_msg if copied else '')
+        toast(message)
 
     def addingtoaddressbook(self):
         """Dialog for saving address"""

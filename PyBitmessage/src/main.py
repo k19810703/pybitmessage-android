@@ -259,6 +259,18 @@ def main():
     # file above; they are the first thing a supporter needs to see.
     probe_environment()
 
+    # Targeted diagnostics for the two complaints that matter: "0 connections"
+    # and "the message never arrived". Records peer error packets, a startup
+    # snapshot and a periodic one that fires whenever the connection count
+    # changes.
+    try:
+        import diag
+        diag.install_hooks()
+        diag.log_network('启动')
+        diag.start_periodic()
+    except Exception as exc:  # noqa: BLE001 - never block startup
+        print('DIAG setup failed: %r' % (exc,), flush=True)
+
     # Diagnostic switch; must run after debug.py configured logging.
     if os.environ.get('BITMESSAGE_LOG_DEBUG'):
         logging.getLogger('default').setLevel(logging.DEBUG)
