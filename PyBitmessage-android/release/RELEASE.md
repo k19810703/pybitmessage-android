@@ -7,7 +7,7 @@
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 28 MB | `10f7b7ef0209acadeeb5f76f922a0a27643587aba33a3e414345141e4b0b82c9` |
+| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 28 MB | `eed1159451b6c2f04b288195071058c7a960200b9918127a99099ef98509d90e` |
 
 校验：
 
@@ -61,7 +61,9 @@ adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.vault > ke
 | 地址簿 / 订阅 / 黑白名单 API 可用（非空时不崩） | ✅ |
 | Android 13 通知权限运行时申请 | ✅ |
 | 私钥加密（Android Keystore 包裹，`keys.dat` 为密文） | ✅ |
-| 中文应用图标 | ✅ |
+| 中文应用图标 + 自己的启动图 | ✅ |
+| 横竖屏自适应（运行时切换） | ✅ |
+| 学到的节点会落盘（重启不用重新抽签） | ✅ |
 
 ## 已知限制
 
@@ -70,7 +72,7 @@ adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.vault > ke
 - 私钥加密依赖设备 Keystore；换机 = 换身份，必须同时迁移 `keys.dat` + `keys.vault`
 - 消息经 P2P 网络转发，**不是即时通讯**：首次给新地址发消息 1–5 分钟，正常送达 23 秒–3 分钟
 - 部分页面仍是英文（搜索框提示、个别设置项）
-- 锁竖屏，平板横屏未适配
+- 横屏可用，但大屏布局仍是单栏（列表+详情两栏留给 M6.3.2）
 - emoji 显示为 ⊠（CJK 字体无 emoji 字形）
 - 首次启动解压慢（3–5 分钟）
 
