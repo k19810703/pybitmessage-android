@@ -184,12 +184,11 @@
                     divider: None
                     on_release: app.set_screen('set')
                     on_release: root.parent.set_state()
-                NavigationItem:
-                    text: app.tr._('Payment plan')
-                    icon: 'shopping'
-                    divider: None
-                    on_release: app.set_screen('payment')
-                    on_release: root.parent.set_state()
+                # The upstream "Payment plan" screen sold Google Play /
+                # PayPal / BTC credits. This app is a serverless, accountless
+                # Bitmessage client -- there is nothing to sell and no payment
+                # backend, so the entry is gone (M6.2.1). The screen itself is
+                # still in the tree as unreachable code; see M6.5.
                 NavigationItem:
                     text: app.tr._('New address')
                     icon: 'account-plus'

@@ -42,6 +42,11 @@ def _register_cjk_font():
         if os.path.exists(path):
             try:
                 LabelBase.register(name='CJK', fn_regular=path)
+                # Also take over the name the Material widgets use for their
+                # theme font. MDLabel/MDTabs ignore a per-widget font_name and
+                # render CJK as tofu boxes unless "Roboto" itself points at a
+                # font that has the glyphs (HANDOFF §6.2).
+                LabelBase.register(name='Roboto', fn_regular=path)
                 FONT = 'CJK'
                 return
             except Exception:  # noqa: BLE001 - a missing font must not crash

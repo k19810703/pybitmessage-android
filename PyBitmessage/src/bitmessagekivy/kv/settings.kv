@@ -189,7 +189,7 @@
                             bold: True
                         MDDropDownItem:
                             id: dropdown_item
-                            text: "System Setting"
+                            text: app.tr._("System Setting")
                             # pos_hint: {"center_x": .5, "center_y": .6}
                             # current_item: "Item 0"
                             # on_release: root.menu.open()
@@ -204,7 +204,7 @@
                                 text: app.tr._('Apply')
                                 # on_press: root.change_language()
         Tab:
-            title: 'Network Settings'
+            title: app.tr._('Network Settings')
             ScrollView:
                 do_scroll_x: False
                 BoxLayout:
@@ -448,7 +448,7 @@
                         MDRaisedButton:
                             text: app.tr._('Apply')
         Tab:
-            title: 'Demanded Difficulty'
+            title: app.tr._('Demanded Difficulty')
             ScrollView:
                 do_scroll_x: False
 
@@ -482,7 +482,7 @@
                             font_style: 'Body1'
                             theme_text_color: 'Primary'
                             # text: app.tr._(root.exp_text)
-                            text: "\n\n\nWhen someone sends you a message, their computer must first complete some work. The difficulty of this work, by default, is 1. You may raise this default for new addresses you create by changing the values here. Any new addresses you create will require senders to meet the higher difficulty. There is one exception: if you add a friend or acquaintance to your address book, Bitmessage will automatically notify them when you next send a message that they need only complete the minimum amount of work: difficulty 1.\n\n"
+                            text: '当你创建一个新地址时，可以要求对方先完成一定量的计算。数值越高，陌生人给你发消息越难，也越能抵御垃圾消息。通讯录里的联系人会自动按最低难度处理。'
                             halign: 'left'
 
                     BoxLayout:
@@ -510,7 +510,7 @@
                             font_style: 'Body1'
                             theme_text_color: 'Primary'
                             # text: app.tr._(root.exp_text)
-                            text: "The 'Total difficulty' affects the absolute amount of work the sender must complete. Doubling this value doubles the amount of work."
+                            text: '总难度决定发送方需要完成的计算量绝对值，翻倍即工作量翻倍。'
                             halign: 'left'
                     
                     BoxLayout:
@@ -539,7 +539,7 @@
                             font_style: 'Body1'
                             theme_text_color: 'Primary'
                             # text: app.tr._(root.exp_text)
-                            text: "The 'Small message difficulty' mostly only affects the difficulty of sending small messages. Doubling this value makes it almost twice as difficult to send a small message but doesn't really affect large messages."
+                            text: '小消息难度主要影响小体积消息的发送成本，对大消息影响不大。'
                             halign: 'left'
 
 
@@ -600,7 +600,7 @@
                             text: app.tr._('Apply')
 
         Tab:
-            title: 'Max acceptable Difficulty'
+            title: app.tr._('Max acceptable Difficulty')
             ScrollView:
                 do_scroll_x: False
                 BoxLayout:
@@ -622,7 +622,7 @@
                             font_style: 'Body1'
                             theme_text_color: 'Primary'
                             # text: app.tr._(root.exp_text)
-                            text: "\n\n\nHere you may set the maximum amount of work you are willing to do to send a message to another person. Setting these values to 0 means that any value is acceptable."
+                            text: '设置你愿意为给别人发消息付出的最大计算量。设为 0 表示不限制。'
                             halign: 'left'
                     # BoxLayout:
                     #     id: box2_height
@@ -694,7 +694,7 @@
                         MDRaisedButton:
                             text: app.tr._('OK')
         Tab:
-            title: 'Resends Expire'
+            title: app.tr._('Resends Expire')
             ScrollView:
                 do_scroll_x: False
                 BoxLayout:
@@ -712,7 +712,7 @@
                             font_style: 'Body1'
                             theme_text_color: 'Primary'
                             # text: app.tr._(root.exp_text)
-                            text: "By default, if you send a message to someone and he is offline for more than two days, Bitmessage will send the message again after an additional two days. This will be continued with exponential backoff forever; messages will be resent after 5, 10, 20 days ect. until the receiver acknowledges them. Here you may change that behavior by having Bitmessage give up after a certain number of days or months."
+                            text: '默认情况下，若对方离线超过两天，消息会按指数退避（5、10、20 天……）继续重发，直到对方确认。这里可以改成超过一定时间就放弃。'
                             halign: 'left'
                     BoxLayout:
                         id: box2_height
@@ -771,7 +771,7 @@
                             text: app.tr._('Apply')
 
         Tab:
-            title: 'Namecoin Integration'
+            title: app.tr._('Namecoin Integration')
             ScrollView:
                 do_scroll_x: False
                 BoxLayout:
@@ -793,7 +793,7 @@
                             font_style: 'Body1'
                             theme_text_color: 'Primary'
                             # text: app.tr._(root.exp_text)
-                            text: "\n\n\n\n\n\nBitmessage can utilize a different Bitcoin-based program called Namecoin to make addresses human-friendly. For example, instead of having to tell your friend your long Bitmessage address, you can simply tell him to send a message to test.\n\n(Getting your own Bitmessage address into Namecoin is still rather difficult).\n\nBitmessage can use either namecoind directly or a running nmcontrol instance\n\n"
+                            text: 'Bitmessage 可以把地址映射到 Namecoin 域名，让地址变得像 test 这样好记。目前把地址注册进 Namecoin 仍然比较麻烦。'
                             halign: 'left'
 
                     BoxLayout:

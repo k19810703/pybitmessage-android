@@ -235,6 +235,25 @@ class Lang(BaseLanguage):
         'Body': '内容',
         'Type or Select sender address': '输入或选择发件地址',
         'Type or Scan QR code for recipients address': '输入或扫描二维码获取收件地址',
+        'Add contact': '添加联系人',
+        'Save': '保存',
+        'Cancel': '取消',
+        'Scan QR code': '扫描二维码',
+        'System Setting': '系统设置',
+        'Network Settings': '网络设置',
+        'Demanded Difficulty': '要求的难度',
+        'Max acceptable Difficulty': '可接受的最大难度',
+        'Resends Expire': '重发截止',
+        'Namecoin Integration': 'Namecoin 集成',
+        'please enter your text': '请输入内容',
+        'To :': '收件人：',
+        "Start Bitmessage in the tray(don't show main window)":
+            '启动时最小化到托盘（不显示主窗口）',
+        "Bitmessage isn't connected to the network.\n If you quit now, it may"
+        " cause delivery delays.\n Wait until connected and the"
+        " synchronisation finishes?":
+            'Bitmessage 还没连上网络。\n现在退出可能导致消息投递延迟。\n'
+            '要等连接成功并完成同步吗？',
     }
 
     def _(self, text):
@@ -356,21 +375,21 @@ class NavigateApp(MDApp):
         """Dialog for saving address"""
         width = DIALOG_WIDTH_ANDROID if platform == 'android' else DIALOG_WIDTH_OTHER
         self.add_popup = MDDialog(
-            title='Add contact',
+            title=self.tr._('Add contact'),
             type="custom",
             size_hint=(width, DIALOG_HEIGHT),
             content_cls=AddAddressPopup(),
             buttons=[
                 MDRaisedButton(
-                    text="Save",
+                    text=self.tr._("Save"),
                     on_release=self.savecontact,
                 ),
                 MDRaisedButton(
-                    text="Cancel",
+                    text=self.tr._("Cancel"),
                     on_release=self.close_pop,
                 ),
                 MDRaisedButton(
-                    text="Scan QR code",
+                    text=self.tr._("Scan QR code"),
                     on_release=self.scan_qr_code,
                 ),
             ],
