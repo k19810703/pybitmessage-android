@@ -341,6 +341,7 @@ class NavigateApp(MDApp):
                 )
             )
         Window.bind(on_request_close=self.on_request_close)
+        Window.bind(on_keyboard=self.on_hardware_key)
         root = Builder.load_file(
             os.path.join(os.path.dirname(__file__), 'main.kv'))
         print('BUILD root=%r ids=%r' % (type(root).__name__,
@@ -578,6 +579,31 @@ class NavigateApp(MDApp):
                 self.root.ids.content_drawer.ids.file_manager.disabled:
             self.root.ids.content_drawer.ids.file_manager.opacity = 1
             self.root.ids.content_drawer.ids.file_manager.disabled = False
+
+    def on_hardware_key(self, _window, key, *_args):
+        """Handle the Android back key (M7.4).
+
+        Without this Kivy lets the system close the activity, so pressing back
+        anywhere quit the app instead of going one page up.
+        """
+        if key != 27:                     # ESC / KEYCODE_BACK
+            return False
+        manager = getattr(self.root.ids, 'scr_mngr', None)
+        if manager is None:
+            return False
+        current = manager.current
+        if current in ('create', 'showqrcode'):
+            self.back_press()
+            return True
+        # a drawer that is open should close first
+        drawer = getattr(self.root.ids, 'nav_drawer', None)
+        if drawer is not None and drawer.state == 'open':
+            drawer.set_state('close')
+            return True
+        if current not in ('messaging', 'inbox'):
+            self.back_press()
+            return True
+        return False                     # let Android exit the app
 
     def on_request_close(self, *args):
         """This method is for app closing request"""

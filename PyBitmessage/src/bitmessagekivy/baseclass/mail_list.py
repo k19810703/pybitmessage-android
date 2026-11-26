@@ -18,6 +18,7 @@ import time
 
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
 from kivy.uix.label import Label
 
 from helper_sql import sqlQuery
@@ -98,19 +99,19 @@ def load_folder(folder, limit=100):
         placeholders = ','.join('?' * len(names))
         if table == 'sent':
             sql = ('SELECT toaddress, fromaddress, subject, message, '
-                   'lastactiontime, status FROM sent WHERE folder IN (%s)'
-                   % placeholders)
+                   'lastactiontime, status, msgid FROM sent '
+                   'WHERE folder IN (%s)' % placeholders)
         else:
             sql = ('SELECT toaddress, fromaddress, subject, message, '
-                   'received, NULL FROM inbox WHERE folder IN (%s)'
-                   % placeholders)
+                   'received, NULL, msgid FROM inbox '
+                   'WHERE folder IN (%s)' % placeholders)
         try:
             result = sqlQuery(sql, *names)
         except Exception as exc:  # noqa: BLE001 - a missing table is not fatal
             print('LIST query failed (%s/%s): %r' % (table, folder, exc),
                   flush=True)
             continue
-        for to_addr, from_addr, subject, body, when, status in result:
+        for to_addr, from_addr, subject, body, when, status, msgid in result:
             rows.append({
                 'to': _text(to_addr),
                 'from': _text(from_addr),
@@ -118,6 +119,9 @@ def load_folder(folder, limit=100):
                 'body': _unrepr(_text(body)),
                 'time': int(when or 0),
                 'status': _text(status) if status else '',
+                # bytes: keep it raw, sqlite matches the blob only that way
+                'msgid': msgid,
+                'table': table,
             })
     rows.sort(key=lambda r: r['time'], reverse=True)
     rows = rows[:limit]
@@ -135,7 +139,7 @@ def _text_label(text, font, size, colour):
     return lbl
 
 
-def render(screen, folder, empty_text='（暂无消息）', on_tap=None):
+def render(screen, folder, empty_text='（暂无消息）', on_tap=None, actions=None):
     """Fill ``screen.ids.ml`` with the rows of *folder*.
 
     Returns the list of rows so callers can keep them for detail views.
@@ -155,8 +159,10 @@ def render(screen, folder, empty_text='（暂无消息）', on_tap=None):
         return []
 
     for row in rows:
-        item = BoxLayout(orientation='vertical', size_hint_y=None,
-                         height=dp(76), padding=(dp(8), dp(6)), spacing=dp(2))
+        line = BoxLayout(orientation='horizontal', size_hint_y=None,
+                         height=dp(76), spacing=dp(6))
+        item = BoxLayout(orientation='vertical', padding=(dp(8), dp(6)),
+                         spacing=dp(2))
         title = row['subject'] or _preview(row['body'], 32)
         item.add_widget(_text_label(title, font, 16, (0.1, 0.1, 0.1, 1)))
         who = row['to'] if folder == 'sent' else row['from']
@@ -169,7 +175,15 @@ def render(screen, folder, empty_text='（暂无消息）', on_tap=None):
         item.add_widget(_text_label(tail, font, 13, (0.25, 0.25, 0.25, 1)))
         if on_tap is not None:
             item.touch_args = row
-        ml.add_widget(item)
+            line.touch_args = row
+        line.add_widget(item)
+        for label, callback in (actions or []):
+            btn = Button(text=label, font_name=font, font_size=dp(12),
+                         size_hint=(None, 1), width=dp(66))
+            btn.bind(on_release=(lambda cb, r: lambda *_: cb(r))(
+                callback, row))
+            line.add_widget(btn)
+        ml.add_widget(line)
 
     print('LIST render %s by %s done: %d widget(s)' % (
         folder, type(screen).__name__, len(ml.children)), flush=True)

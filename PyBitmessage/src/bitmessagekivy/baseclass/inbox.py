@@ -180,7 +180,7 @@ class Inbox(Screen):
                 text=self.label_str, font_name=font,
                 color=(.5, .5, .5, 1)))
             return
-        for from_addr, subject, body, received in messages:
+        for from_addr, subject, body, received, _msgid in messages:
             title = subject or (body[:32] + ('…' if len(body) > 32 else ''))
             # Plain BoxLayout rows -- they render correctly (verified). The
             # tap is picked up by the MDList-level handler installed in

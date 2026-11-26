@@ -100,11 +100,16 @@ def send_message(to_address, body, subject=''):
 
 
 def inbox(limit=50):
-    """Newest first: (from, subject, body, received)."""
+    """Newest first: (from, subject, body, received, msgid).
+
+    msgid is the raw blob from sqlite -- keep it as bytes, a str will never
+    match the row (M7.1.1).
+    """
     rows = sqlQuery(
-        'SELECT fromaddress, subject, message, received FROM inbox '
-        'ORDER BY received DESC LIMIT ?', limit)
-    return [(_text(r[0]), _text(r[1]), _text(r[2]), r[3]) for r in rows]
+        'SELECT fromaddress, subject, message, received, msgid FROM inbox '
+        "WHERE folder='inbox' ORDER BY received DESC LIMIT ?", limit)
+    return [(_text(r[0]), _text(r[1]), _text(r[2]), r[3], r[4])
+            for r in rows]
 
 
 class MessagingScreen(Screen):
@@ -287,6 +292,38 @@ class MessagingScreen(Screen):
             Clipboard.copy(addr)
         self._set_status('地址已复制')
 
+    def _confirm_delete(self, msgid):
+        """Ask before trashing a message, then move it to 回收站 (M7.1.2)."""
+        from kivy.uix.popup import Popup
+
+        box = BoxLayout(orientation='vertical', padding=dp(12), spacing=dp(10))
+        box.add_widget(Label(text='移到回收站？', font_name=FONT,
+                             font_size=dp(14)))
+        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
+        popup = Popup(title='删除消息', title_font=FONT, content=box,
+                      size_hint=(.8, .35))
+
+        def do_delete(*_args):
+            try:
+                import helper_inbox
+                helper_inbox.trash(msgid)
+                self._set_status('已移到回收站')
+                print('INBOX trash msgid=%r' % (msgid[:4],), flush=True)
+            except Exception as exc:  # noqa: BLE001
+                self._set_status('删除失败：%s' % exc)
+                print('INBOX trash failed: %r' % (exc,), flush=True)
+            popup.dismiss()
+            self.refresh_inbox()
+
+        cancel = Button(text='取消', font_name=FONT, font_size=dp(14))
+        ok = Button(text='删除', font_name=FONT, font_size=dp(14))
+        cancel.bind(on_release=lambda *_: popup.dismiss())
+        ok.bind(on_release=do_delete)
+        buttons.add_widget(cancel)
+        buttons.add_widget(ok)
+        box.add_widget(buttons)
+        popup.open()
+
     def _set_status(self, text):
         self.status.text = text
 
@@ -342,9 +379,10 @@ class MessagingScreen(Screen):
                 self._label('（暂无消息）', size=13,
                             color=(.6, .6, .6, 1), height=dp(40)))
             return
-        for from_addr, subject, body, _received in messages:
-            item = BoxLayout(orientation='vertical', size_hint_y=None,
-                             height=dp(66), spacing=dp(2))
+        for from_addr, subject, body, _received, msgid in messages:
+            line = BoxLayout(orientation='horizontal', size_hint_y=None,
+                             height=dp(66), spacing=dp(6))
+            item = BoxLayout(orientation='vertical', spacing=dp(2))
             title = subject or (body[:24] + ('…' if len(body) > 24 else ''))
             item.add_widget(self._label(title, size=14, bold=True,
                                         height=dp(24)))
@@ -352,4 +390,10 @@ class MessagingScreen(Screen):
                                         color=(.45, .45, .45, 1),
                                         height=dp(18)))
             item.add_widget(self._label(body[:120], size=12, height=dp(20)))
-            self.inbox_box.add_widget(item)
+            line.add_widget(item)
+            delete_btn = Button(text='删除', font_name=FONT, font_size=dp(12),
+                                size_hint=(None, 1), width=dp(58))
+            delete_btn.bind(on_release=(lambda mid: lambda *_: (
+                self._confirm_delete(mid)))(msgid))
+            line.add_widget(delete_btn)
+            self.inbox_box.add_widget(line)
