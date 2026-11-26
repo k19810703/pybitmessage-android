@@ -317,6 +317,43 @@ App 不崩、收发照常，只是没有通知——**这是通过标准之一�
 
 ---
 
+## 6.0o ▶ 2026-11-26 11:40：M4.8.11 修完并干净包验收
+
+**平板当前包**：`pybitmessage-0.6.3.2-m4811-2026-11-26.apk`（run 45747231642，
+sha256 `a8adcdff…ec8c`，与设备 `base.apk` 一致，**零热补丁**）。
+
+### M4.8.11 三条根因（详见 EVIDENCE §1.70）
+
+1. **主因**：version 里广告 `NODE_SSL`，但因为 TLS 已默认关闭，我们从不发起升级 →
+   对端等约 10s 就断开（实测连接活 9 秒），于是连接数永远 0–2。
+   修法：`protocol._ssl_service_flag()`，TLS 关闭时不写这个标志。
+2. 半开上限 64 → 每 20 秒铺满一次（3 次连接/秒的风暴）。修法：Android 降到 9 + 限速 +
+   探测模式；可用 `[bootstrap] max_half_open` 覆盖。
+3. asyncore 的异常只在 INFO 级 → 连接死得无声。修法：`ASYNCORE-ERROR …` 打进应用日志。
+
+干净包实测：出站 **7**（原 43–56）、`established` **稳定 1**、`recv object` **557**（原 10）。
+
+### ⚠️ 两条必须记住的装机纪律
+
+1. **`pm install -r` 不刷新 `files/app`**。换代码必须：
+   ```bash
+   adb shell pm install -r -d /data/local/tmp/bm.apk
+   adb shell "run-as at.bitmessage.pybitmessage rm -rf files/app"
+   adb shell am start -n at.bitmessage.pybitmessage/org.kivy.android.PythonActivity
+   ```
+   App 启动时会从 APK 重新解包；**`files/bitmessage`（keys/messages）不受影响**。
+2. **不要批量删 `files/app/network/*.pyc`**：那些模块在 APK 里只有 pyc、没有 py 源码。
+   删了会 `ImportError: StoppableThread` 启动即崩。要恢复：从 APK 的
+   `assets/private.tar` 解出 `network/` 整包推回。
+
+### 下一步
+
+1. **G4 闸门**（用户要求最后做）：D5 锁屏 30 分钟、C3 电量 ≤8%/h（M4.7.1）
+2. 收件箱「等待公钥」的两条消息：连接稳定后应能逐步推进（M4.8.11 修好后可复测）
+3. 体验类：键盘遮挡正文框、抽屉「聊天」条目在长列表末尾
+
+---
+
 ## 6.0n ▶ 2026-11-26 10:25：M7.5 发送按钮修复（平板已装干净包）
 
 **平板当前包**：`pybitmessage-0.6.3.2-m75-2026-11-26.apk`

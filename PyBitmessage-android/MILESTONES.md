@@ -306,7 +306,7 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | **M7.1** ✅ | **收件箱邮件可删除**（用户 2026-11-25 提出） | 主界面收件箱只能看，不能删；抽屉里的「回收站」只有列表、没有操作 | 主界面每行加删除（软删进回收站）；回收站支持「恢复」「彻底删除」 | **S**：点删除后该行立刻消失、重启后仍不在；回收站能看到并可恢复；彻底删除后 `messages.dat` 里查不到；**F**：`folder` 由 `inbox` 变 `trash` | M7 | **高（用户需求）** |
 | | | | | **设备验收通过**（EVIDENCE §1.67）：`{'inbox':16,'trash':1}` → 恢复回 17 → 彻底删除后总行数 16 |
 
-| **M4.8.11** | 连接数 0↔2 抖动、出站半开连接堆到 50+（maxout=8）、对象收到却不处理 | `[DIAG]`：outbound=43–56 常年高于 maxout；`numberOfMessagesProcessed` 长期 0 而 `recv object` 有 10 | 查 `connectionpool.loop()` 的 spawn/回收条件与 M4.8.4 的计数来源 | **A**：`networkConnections` 稳定 ≥2 十分钟；**A**：`numberOfMessagesProcessed` 随 `recv object` 增长 | M4.8 | 高 |
+| **M4.8.11** ✅ | 连接数 0↔2 抖动、出站半开 50+、收不到对象 | ① 广告 `NODE_SSL` 却不做 TLS → 对端 9 秒后断开；② 半开上限 64 → 每 20 秒铺满一次（连接风暴）；③ asyncore 把异常吞在 INFO 级 | ① TLS 关闭时不广告 SSL；② Android 半开降到 9 + 限速 + 探测模式；③ 异常打到应用日志 | **A**：`established` 稳定、出站 ≤9；**L**：`recv object` 显著增长 | **通过**（EVIDENCE §1.70，干净包）：出站 50+→**7**、`established` 稳定 **1**、`recv object` 10→**557**、零热补丁 | M4.8 | 高 |
 
 | **M4.8.10** ✅ | 连接数恒为 0（协议握手完成但从未 established） | `networkConnections=0`，日志里 `sent verack` 数十次、`TCP established` 为 0 | TLS 升级默认关闭 + 握手 20s 超时 + `process()` 跟进状态移交 | **A**：`networkConnections ≥ 1`；**L**：出现 `TCP established` | M4.8 | **高（用户报告）** |
 

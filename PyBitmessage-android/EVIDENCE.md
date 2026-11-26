@@ -591,6 +591,67 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.70 ✅✅✅ M4.8.11 连接数抖动 / 出站 50+ / 收不到对象 —— 三条根因（2026-11-26 11:35）
+
+**症状**：`networkConnections` 在 0↔2 之间抖；出站半开常年 43–56（`maxoutboundconnections=8`）；
+`numberOfMessagesProcessed` 长期 0。
+
+#### 根因 1（主因）：我们广告了 `NODE_SSL` 却不做 TLS 升级 → 对端约 9 秒后主动断开
+
+在 `bmproto.handle_close` 上打点，拿到调用栈：
+
+```
+CLOSE 158.69.63.42:8080 est=True reason=None by handle_read > handle_read > recv > handle_close
+CLOSE 158.69.63.42:8080 est=True reason=None by loop > epoll_poller > readwrite > handle_close
+```
+
+`recv` 返回 EOF —— **是对端关的我们**，而且都发生在 `TCP established` 之后约 9 秒。
+
+原因链：M4.8.10 为了让连接能建立把 TLS 默认关了；但 `protocol.assembleVersionMessage()`
+仍按 `haveSSL(server)` 在 version 里写 `NODE_SSL`。对端看到这个标志就**等我们发起 TLS**，
+等不到（约 10s 超时）就断开。于是每条连接握手成功后活 9 秒即死，连接数永远是 0–2，
+每次都要重连，knownnodes 也不再增长。
+
+修复：`_ssl_service_flag()` —— **TLS 关闭时不再广告 NODE_SSL**，双方直接走明文。
+
+#### 根因 2：`maximumNumberOfHalfOpenConnections = 64` 造成连接风暴
+
+`helper_startup.adjustHalfOpenConnectionsLimit()` 对非 Windows 给 64。半开连接空闲 20 秒
+被回收，于是每 20 秒重新铺满 64 条 —— 约 3 次连接/秒，既费电又触发对端
+「Too many connections from your IP」。
+
+修复：Android 上默认降到 **9**（可用 `[bootstrap] max_half_open` 覆盖）；连接池加**限速**
+（每轮最多 1 条、间隔 0.5s），并在「一条都没连上」时进入短时**探测模式**（32 槽位、每轮 4 条），
+免得降并发后找不到活节点。
+
+#### 根因 3：asyncore 吞掉了异常
+
+`handle_error()` 只 `log_info()`（INFO 级），而默认级别是 WARNING —— 连接因异常死掉时
+**完全无声**。现在会把 `ASYNCORE-ERROR <repr>: <type>: <value>` 打到应用日志。
+
+#### 干净包验收（run 45747231642，先清空 `files/app` 再让 App 解包，零热补丁）
+
+| 指标 | 修复前 | 干净包实测 |
+|---|---|---|
+| 设备包 sha256 | — | `a8adcdff…ec8c`（与本地一致） |
+| 出站连接数 | 43–56 | **7** |
+| `established` | 0↔2 抖动 | **1，连续 3 次采样稳定** |
+| 本次会话 `recv object` | 10 | **557** |
+| 热补丁 | 若干 | **0** |
+
+> `established=1` 而非 8：这台平板到公网节点可达率很低（大量死节点，rating>0 仅 4–5 个）。
+> 关键是**不再抖动、不再被对端 9 秒踢掉、对象持续下载** —— 收消息链路通了。
+
+#### ⚠️ 过程中自己搞的两个事故（均已恢复）
+
+1. 清 pyc 时执行 `find files/app -name "*.pyc" -path "*network*" -delete`，把 `network/` 下
+   **只有 pyc、没有 py 源码**的模块删了 → `ImportError: cannot import name
+   'StoppableThread' from 'network'`，App 启动即崩。恢复方法：从 APK 的
+   `assets/private.tar` 解出 `network/` 整包推回。
+2. **`pm install -r` 不会刷新 `files/app`**（那是应用数据目录）。要真正换代码必须
+   `rm -rf files/app` 让 App 重新解包 —— 数据在 `files/bitmessage`，不受影响。
+   这正是之前"装了新包但行为没变"的原因，已写进 HANDOFF。
+
 ### 1.68 ✅ M7.5 发消息页右上角「飞机」发送键点了没反应（2026-11-26 10:15）
 
 **用户反馈**：发消息界面右上角的发送（纸飞机）图标按了没反应。
