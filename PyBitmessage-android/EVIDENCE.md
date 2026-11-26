@@ -591,6 +591,43 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.66 ✅ M7.3 发消息页左上返回箭头点了没用（2026-11-26 09:12）
+
+**用户反馈**：发消息界面左上角的后退箭头点了没反应。
+
+**根因（纯代码缺陷，不是布局/命中问题）**：`NavigateApp.back_press()` 是个空壳——
+
+```python
+def back_press(self):
+    if self.root.ids.scr_mngr.current == 'showqrcode':   # 只有二维码页会切
+        ...
+    self.root.ids.scr_mngr.transition.bind(on_complete=self.reset)
+    self.kivy_state.in_composer = False                   # 只清标志位
+```
+
+它**从来没有改过 `screen`**，所以除了二维码页，按了等于没按。
+
+**修复**（commit `a94f3d0`）
+
+1. `set_screen()` 记录来源页 `self._previous_screen`
+2. `back_press()` 真正切页面：从 `create` 回 `inbox`（加号所在页），其它情况回记录的来源页，兜底 `messaging`
+3. 顺手删掉字典里一个重复键；`clear_composer()` 改为回到默认发件人（不再清成 `Select`）
+
+**设备验证**
+
+```
+BACK: 'create' -> 'inbox'      ← 日志确认（此前完全没有任何日志）
+```
+截图确认回到收件箱列表页（`artifacts/m73-back-to-inbox.png`）。
+
+> 顺带发现：**安卓硬件返回键目前是直接退出 App**（没有任何 `on_keyboard` 处理）。
+> 这不在本次反馈范围内，已记入 HANDOFF 待办（M7.4）。
+
+**又一次热补丁教训**：`bitmessagemain.py` 导入的是 `bitmessagekivy.mpybit`，
+而 `screens_data.json` 里的屏幕用 `pybitmessage.bitmessagekivy....` 导入 —— **两棵树都是活的**。
+只补一棵时"代码改了但没生效"（这次就是：app 类在 `bitmessagekivy/`，composer 在 `pybitmessage/`）。
+**规则：热补丁一律两棵都写。**
+
 ### 1.65 ✅ M7.2 发消息界面的三个问题（2026-11-26 09:05）
 
 用户原文：菜单选收件箱 → 右下角加号进发消息界面，① 发件地址是输入框没必要；② 收件地址无法黏贴；③ 横线下那个输入框无法使用、功能不明。
