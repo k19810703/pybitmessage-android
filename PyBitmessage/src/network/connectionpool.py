@@ -50,6 +50,20 @@ class BMConnectionPool(object):
         self.udpSockets = {}
         self.streams = []
         self._lastSpawned = 0
+        #: At most this many new outbound attempts per pool loop, and no more
+        #: often than MIN_SPAWN_INTERVAL. Together with the 20s half-open
+        #: timeout this keeps the number of attempts bounded (M4.8.11).
+        self.MAX_SPAWNS_PER_ROUND = 1
+        self.MIN_SPAWN_INTERVAL = 0.5
+        #: While nothing is established we are still looking for a reachable
+        #: peer: probe harder for a short while, then settle back to the quiet
+        #: profile above. Without this the reduced concurrency made discovery
+        #: worse than the old 64-way storm (measured: 9 slots -> 0 established).
+        self.BOOTSTRAP_HALF_OPEN = 32
+        self.BOOTSTRAP_SPAWNS_PER_ROUND = 4
+        self.BOOTSTRAP_MIN_INTERVAL = 0.25
+        self.BOOTSTRAP_GRACE = 30.0
+        self._lastEstablishedAt = time.time()
         self._spawnWait = 2
         self._bootstrapped = False
 
@@ -306,9 +320,34 @@ class BMConnectionPool(object):
             pending = len(self.outboundConnections) - established
             maxOutbound = config.safeGetInt(
                 'bitmessagesettings', 'maxoutboundconnections')
+            half_open_budget = state.maximumNumberOfHalfOpenConnections
+            spawns_per_round = self.MAX_SPAWNS_PER_ROUND
+            min_interval = self.MIN_SPAWN_INTERVAL
+            if established:
+                self._lastEstablishedAt = time.time()
+                self._spawnWait = 2
+            elif (time.time() - self._lastEstablishedAt
+                  > self.BOOTSTRAP_GRACE):
+                # discovery phase: nothing is up, look harder
+                half_open_budget = max(half_open_budget,
+                                       self.BOOTSTRAP_HALF_OPEN)
+                spawns_per_round = self.BOOTSTRAP_SPAWNS_PER_ROUND
+                min_interval = self.BOOTSTRAP_MIN_INTERVAL
+                # asyncore.loop(timeout=_spawnWait) paces the whole loop, so
+                # leaving it at 2s capped the burst to one attempt per 2
+                # seconds no matter what MIN_SPAWN_INTERVAL said.
+                self._spawnWait = 0.25
             if established < maxOutbound:
-                for i in range(
-                        state.maximumNumberOfHalfOpenConnections - pending):
+                # M4.8.11: pace new connections. Without this the pool filled
+                # every half-open slot in one go, the reaper then closed all
+                # the stalled ones after 20s, and the next round immediately
+                # started another 64 -- a permanent connect storm.
+                spawned = 0
+                for i in range(half_open_budget - pending):
+                    if spawned >= spawns_per_round:
+                        break
+                    if time.time() - self._lastSpawned < min_interval:
+                        break
                     try:
                         chosen = self.trustedPeer or chooseConnection(
                             random.choice(self.streams))  # nosec B311
@@ -359,6 +398,7 @@ class BMConnectionPool(object):
                         if e.errno == errno.ENETUNREACH:
                             continue
 
+                    spawned += 1
                     self._lastSpawned = time.time()
         else:
             for i in self.outboundConnections.values():

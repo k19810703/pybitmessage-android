@@ -361,6 +361,24 @@ def assembleAddrMessage(peerList):
     return retval
 
 
+def _ssl_service_flag(server):
+    """NODE_SSL for the version message -- unless we will not upgrade.
+
+    A peer that sees NODE_SSL waits for the TLS handshake before it considers
+    the connection usable. When TLS is disabled locally the upgrade never
+    happens, so the peer closes the TCP connection a few seconds after verack
+    (measured: ~9s), which looked exactly like "connections keep dropping"
+    (M4.8.11). Not advertising the flag keeps both sides on plaintext.
+    """
+    try:
+        import state
+        if getattr(state, 'disable_tls', False):
+            return 0
+    except Exception:  # noqa: BLE001 - state may not be importable yet
+        pass
+    return NODE_SSL if haveSSL(server) else 0
+
+
 def assembleVersionMessage(
         remoteHost, remotePort, participatingStreams,
         dandelion_enabled=True, server=False, nodeid=None
@@ -375,7 +393,7 @@ def assembleVersionMessage(
     payload += pack(
         '>q',
         NODE_NETWORK
-        | (NODE_SSL if haveSSL(server) else 0)
+        | _ssl_service_flag(server)
         | (NODE_DANDELION if dandelion_enabled else 0)
     )
     payload += pack('>q', int(time.time()))
@@ -399,7 +417,7 @@ def assembleVersionMessage(
     payload += pack(
         '>q',
         NODE_NETWORK
-        | (NODE_SSL if haveSSL(server) else 0)
+        | _ssl_service_flag(server)
         | (NODE_DANDELION if dandelion_enabled else 0)
     )
     # = 127.0.0.1. This will be ignored by the remote host.

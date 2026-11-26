@@ -5,9 +5,9 @@ Startup operations.
 
 import ctypes
 import logging
-import os
 import platform
 import socket
+import os
 import sys
 import time
 from distutils.version import StrictVersion
@@ -292,7 +292,20 @@ def adjustHalfOpenConnectionsLimit():
     except ValueError:
         pass
 
-    state.maximumNumberOfHalfOpenConnections = 9 if is_limited else 64
+    # M4.8.11: the upstream default (64) assumes a desktop with cheap
+    # non-blocking connects. Here a half-open connection that never completes
+    # the handshake is closed after 20s (connectionpool reaper), so 64 slots
+    # meant a burst of ~64 SYNs every 20 seconds, forever -- 3 connects per
+    # second on mobile data, which peers answer with
+    # "Too many connections from your IP" and which drains the battery.
+    # 9 concurrent attempts is plenty to find reachable peers when only 8
+    # established connections are wanted.
+    if os.environ.get('ANDROID_ARGUMENT'):
+        default_half_open = 9
+    else:
+        default_half_open = 9 if is_limited else 64
+    state.maximumNumberOfHalfOpenConnections = config.safeGetInt(
+        'bootstrap', 'max_half_open', default_half_open)
 
 
 def fixSocket():

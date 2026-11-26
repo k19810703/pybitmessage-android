@@ -814,6 +814,14 @@ class dispatcher(object):
         except BaseException:
             self_repr = '<__repr__(self) failed for object at %0x>' % id(self)
 
+        # Also write it where the on-device log can see it: log_info() goes to
+        # the logger at INFO level, which is invisible with the default
+        # WARNING level, so a connection that died of an exception looked like
+        # it simply vanished (M4.8.11 investigation).
+        try:
+            print('ASYNCORE-ERROR %s: %s: %s' % (self_repr, t, v), flush=True)
+        except Exception:  # noqa: BLE001
+            pass
         self.log_info(
             'uncaptured python exception, closing channel %s (%s:%s %s)' % (
                 self_repr, t, v, tbinfo),
