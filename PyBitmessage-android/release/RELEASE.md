@@ -7,7 +7,7 @@
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 28 MB | `1f496353286d81999e9eb182a74c1df0d1ab94098fc2edca5fb53efbc475186d` |
+| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 28 MB | `179d54304a37e3ea5565080a779312e227551ffd8a5add8e09fde3e0c148643a` |
 
 校验：
 
@@ -67,6 +67,9 @@ adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.vault > ke
 | 能连上公网节点（TLS 卡死已修） | ✅ 实测 0→2 条 |
 | 诊断日志（3 天）+ 抽屉里一键分享 | ✅ |
 | 界面内两栏布局（平板横屏） | ✅ |
+| 收件箱可删除（回收站可恢复/彻底删除） | ✅ |
+| 发消息页：发件地址下拉、粘贴按钮、地址联想 | ✅ |
+| 硬件返回键/左上箭头：返回上一页而不是退出 | ✅ |
 
 ## 已知限制
 
