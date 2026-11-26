@@ -157,6 +157,68 @@ class DropDownWidget(BoxLayout):
         print('COMPOSER sender=%s (of %d)' % (chosen, len(identities)),
               flush=True)
 
+    def pick_contact(self):
+        """Pick a recipient from the address book (M7.6).
+
+        The button to the right of the recipient field used to paste; the user
+        asked for it to open the address book instead, and to leave pasting to
+        the system long-press menu.
+        """
+        from kivy.metrics import dp
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.label import Label
+        from kivy.uix.popup import Popup
+        from kivy.uix.scrollview import ScrollView
+
+        self.refresh_candidates()
+        entries = list(getattr(self, 'candidates', []))
+        try:
+            from pybitmessage.bitmessagekivy.baseclass.mail_list import cjk_font
+            font = cjk_font()
+        except Exception:  # noqa: BLE001
+            font = 'Roboto'
+
+        box = BoxLayout(orientation='vertical', padding=dp(8), spacing=dp(6))
+        popup = Popup(title='从通讯录选择收件人', title_font=font, content=box,
+                      size_hint=(.92, .75))
+        scroll = ScrollView()
+        listing = BoxLayout(orientation='vertical', size_hint_y=None,
+                            spacing=dp(2))
+        listing.bind(minimum_height=listing.setter('height'))
+
+        if not entries:
+            listing.add_widget(Label(
+                text='通讯录是空的，先用右上角「添加联系人」加一个',
+                font_name=font, size_hint_y=None, height=dp(48)))
+        for item in entries:
+            btn = Button(text=item['text'], font_name=font, font_size=dp(13),
+                         size_hint_y=None, height=dp(46),
+                         halign='left', valign='middle')
+            btn.bind(size=lambda w, *_a: setattr(
+                w, 'text_size', (w.width - dp(12), None)))
+            btn.bind(on_release=(lambda addr, pop: (
+                lambda *_: (self._set_recipient(addr), pop.dismiss())))(
+                    item['address'], popup))
+            listing.add_widget(btn)
+
+        scroll.add_widget(listing)
+        box.add_widget(scroll)
+        close = Button(text='取消', font_name=font, font_size=dp(14),
+                       size_hint_y=None, height=dp(44))
+        close.bind(on_release=lambda *_: popup.dismiss())
+        box.add_widget(close)
+        popup.open()
+
+    def _set_recipient(self, address):
+        """Fill the recipient field with a bare address."""
+        self.ids.txt_input.text = address
+        print('COMPOSER picked %s' % address, flush=True)
+        try:
+            self.ids.txt_input.focus = True
+        except Exception:  # noqa: BLE001
+            pass
+
     def paste_recipient(self):
         """Paste the clipboard into the recipient field.
 
@@ -189,10 +251,12 @@ class DropDownWidget(BoxLayout):
         self.ids.txt_input.focus = True
 
     def refresh_candidates(self):
-        """Fill the recipient suggestion list from the address book.
+        """Build the recipient picker: address book first, then our addresses.
 
-        The RecycleView under the recipient field was never populated, so it
-        showed as an empty box with no function (reported M7.2.3).
+        The old version stuffed "label address" strings into word_list and
+        matched them by *prefix of the whole string*, so typing "BM-2c" filtered
+        every address-book entry out and only our own addresses survived --
+        which is why the list looked useless (reported 2026-11-26).
         """
         candidates = []
         try:
@@ -203,15 +267,26 @@ class DropDownWidget(BoxLayout):
                     label, (bytes, bytearray)) else str(label or '')
                 address = address.decode('utf-8', 'replace') if isinstance(
                     address, (bytes, bytearray)) else str(address or '')
-                if address:
-                    candidates.append(
-                        '%s %s' % (label, address) if label else address)
+                if not address:
+                    continue
+                short = '%s…%s' % (address[:8], address[-4:]) \
+                    if len(address) > 16 else address
+                text = '%s   %s' % (label or '（无标签）', short)
+                candidates.append({
+                    'text': text, 'address': address, 'label': label})
         except Exception as exc:  # noqa: BLE001 - empty book is fine
             print('COMPOSER addressbook: %r' % (exc,), flush=True)
         for address in (getattr(self.kivy_running_app, 'identity_list', []) or []):
-            if address not in candidates:
-                candidates.append(address)
-        self.ids.txt_input.word_list = candidates
+            if any(item['address'] == address for item in candidates):
+                continue
+            candidates.append({
+                'text': '（我的地址）   %s' % (
+                    '%s…%s' % (address[:8], address[-4:])
+                    if len(address) > 16 else address),
+                'address': address, 'label': ''})
+        self.candidates = candidates
+        self.ids.txt_input.word_list = [item['text'] for item in candidates]
+        print('COMPOSER candidates=%d' % len(candidates), flush=True)
 
     def send(self, *args):
         """Send the composed message from the toolbar paper-plane.
@@ -325,22 +400,45 @@ class MyTextInput(MDTextField):
         self._render_suggestions(self.text or '')
 
     def _render_suggestions(self, value):
+        """Keep the inline suggestion box collapsed.
+
+        Recipients are picked from the address-book dialog now; the inline list
+        only confused people, so it stays hidden.
+        """
+        rv = self.rv
+        if rv is not None:
+            rv.data = []
+            rv.height = 0
+            rv.opacity = 0
+            rv.disabled = True
+        return
         """Show matching candidates, or collapse the box when there are none."""
         rv = self.rv
         if rv is None:
             return
         value = (value or '').strip()
-        max_recipient_len = 10
-        row_height = 24
-        matches = []
-        if value:
-            prefix = value[:self.starting_no]
-            matches = [item for item in self.word_list
-                       if item[:self.starting_no].lower() == prefix.lower()]
-            matches = matches[:max_recipient_len]
-        rv.data = [{'text': item} for item in matches]
+        try:
+            owner = App.get_running_app().root.ids.id_create.children[0]
+            candidates = getattr(owner, 'candidates', [])
+        except Exception:  # noqa: BLE001
+            candidates = []
+        from kivy.metrics import dp as _dp
+        max_rows = 6
+        row_height = _dp(30)
+        if not candidates:
+            matches = [{'text': t, 'address': t} for t in (self.word_list or [])]
+        elif not value:
+            # nothing typed yet: offer the whole address book
+            matches = candidates[:max_rows]
+        else:
+            lowered = value.lower()
+            matches = [
+                item for item in candidates
+                if item['address'].lower().startswith(lowered)
+                or lowered in (item.get('label') or '').lower()
+            ][:max_rows]
+        rv.data = matches
         if not matches:
-            # collapsed: no invisible dead box under the line (M7.2.3)
             rv.height = 0
             rv.opacity = 0
             rv.disabled = True
@@ -382,7 +480,9 @@ class SelectableLabel(RecycleDataViewBehavior, Label):
         self.selected = is_selected
         if is_selected:
             logger.debug("selection changed to %s", rv.data[index])
-            rv.parent.txt_input.text = rv.parent.txt_input.text.replace(
-                rv.parent.txt_input.text, rv.data[index]["text"]
-            )
+            entry = rv.data[index]
+            # insert the bare address, never the "label  address" display text
+            value = entry.get('address') or entry.get('text', '')
+            rv.parent.txt_input.text = value
+            rv.parent.txt_input.focus = True
 

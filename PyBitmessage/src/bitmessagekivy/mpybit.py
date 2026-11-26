@@ -454,18 +454,68 @@ class NavigateApp(MDApp):
         return is_available
 
     def savecontact(self, instance):
-        """Method is used for saving contacts"""
+        """Save the contact into the address book.
+
+        This used to only move the focus between the two fields and return --
+        the dialog looked dead when you pressed 保存 (reported 2026-11-26).
+        """
         popup_obj = self.add_popup.content_cls
-        label = popup_obj.ids.label.text.strip()
-        address = popup_obj.ids.address.text.strip()
-        popup_obj.ids.label.focus = not label
-        # default focus on address field
-        popup_obj.ids.address.focus = label or not address
+        label = (popup_obj.ids.label.text or '').strip()
+        address = (popup_obj.ids.address.text or '').strip()
+        if not address:
+            popup_obj.ids.address.focus = True
+            toast('请填写地址')
+            return False
+        try:
+            from addresses import addBMIfNotPresent, decodeAddress
+            address = addBMIfNotPresent(address)
+            status = decodeAddress(address)[0]
+        except Exception as exc:  # noqa: BLE001
+            print('CONTACT invalid address: %r' % (exc,), flush=True)
+            toast('地址格式不正确')
+            return False
+        if status != 'success':
+            popup_obj.ids.address.focus = True
+            toast('地址格式不正确')
+            return False
+        try:
+            from helper_sql import sqlQuery
+            if sqlQuery('SELECT address FROM addressbook WHERE address=?',
+                        address):
+                toast('这个地址已经在通讯录里了')
+                return False
+            import helper_addressbook
+            if not helper_addressbook.insert(
+                    label=label or address, address=address):
+                toast('不能把本机地址加进通讯录')
+                return False
+        except Exception as exc:  # noqa: BLE001 - report, never crash
+            print('CONTACT save failed: %r' % (exc,), flush=True)
+            toast('保存失败：%s' % (exc,))
+            return False
+        print('CONTACT saved label=%r address=%s' % (label, address),
+              flush=True)
+        # Refresh the address book screen right away, the same way the label
+        # edit path does: without this the entry is in sqlite but the list on
+        # screen still shows the old contents (reported 2026-11-26).
+        try:
+            book = self.root.ids.id_addressbook
+            book.ids.ml.clear_widgets()
+            book.loadAddresslist(None, 'All', '')
+            print('CONTACT addressbook refreshed', flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print('CONTACT refresh failed: %r' % (exc,), flush=True)
+        try:
+            self.add_popup.dismiss()
+        except Exception:  # noqa: BLE001
+            pass
+        toast('已保存到通讯录')
+        return True
 
     def close_pop(self, instance):
         """Close the popup"""
         self.add_popup.dismiss()
-        toast('Canceled')
+        toast('已取消')
 
     def load_my_address_screen(self, action):
         """load_my_address_screen method spin the loader"""

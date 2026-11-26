@@ -54,6 +54,18 @@ class AddressBook(Screen, HelperAddressBook):
         self.addbook_popup = None
         self.kivy_state = kivy_state_variables()
 
+    def on_pre_enter(self, *args):
+        """Re-read the address book every time the screen is shown.
+
+        Entries added elsewhere (the 添加联系人 dialog) were invisible until the
+        app restarted, because the list was only built once.
+        """
+        try:
+            self.ids.ml.clear_widgets()
+            self.loadAddresslist(None, 'All', '')
+        except Exception as exc:  # noqa: BLE001 - never block navigation
+            print('ADDRESSBOOK refresh failed: %r' % (exc,), flush=True)
+
     def loadAddresslist(self, account, where="", what=""):
         """Load address list with optional search filters"""
         if self.kivy_state.searching_text:
