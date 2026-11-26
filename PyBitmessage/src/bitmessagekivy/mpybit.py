@@ -474,32 +474,50 @@ class NavigateApp(MDApp):
         else:
             self.root.ids.id_myaddress.children[1].active = action
 
+    #: Drawer labels are translated before they reach the widget, so matching
+    #: on the English text alone silently stopped working once the UI became
+    #: Chinese (回收站 never opened: load_screen compared with 'Trash').
+    _NAV_ALIASES = {
+        'inbox': 'inbox', '收件箱': 'inbox',
+        'trash': 'trash', '回收站': 'trash',
+        'sent': 'sent', '已发送': 'sent',
+        'draft': 'draft', '草稿': 'draft',
+    }
+
+    def _nav_key(self, instance):
+        """Canonical screen key for a drawer item, English or Chinese."""
+        return self._NAV_ALIASES.get(
+            (getattr(instance, 'text', '') or '').strip(), '')
+
     def load_screen(self, instance):
         """This method is used for loading screen on every click"""
-        if instance.text == 'Inbox':
+        key = self._nav_key(instance)
+        if key == 'inbox':
             self.root.ids.scr_mngr.current = 'inbox'
             self.root.ids.id_inbox.children[1].active = True
-        elif instance.text == 'Trash':
+        elif key == 'trash':
+            # Trash.on_pre_enter() renders the folder itself; the old code also
+            # cleared the screen and instantiated a *new* Trash widget here,
+            # which left a blank page.
             self.root.ids.scr_mngr.current = 'trash'
             try:
                 self.root.ids.id_trash.children[1].active = True
-            except Exception as e:
-                self.root.ids.id_trash.children[0].children[1].active = True
+            except Exception:
+                pass
         Clock.schedule_once(partial(self.load_screen_callback, instance), LOADER_DELAY)
 
     def load_screen_callback(self, instance, dt=0):
         """This method is rotating loader for few seconds"""
-        if instance.text == 'Inbox':
+        key = self._nav_key(instance)
+        if key == 'inbox':
             self.root.ids.id_inbox.ids.ml.clear_widgets()
             self.root.ids.id_inbox.loadMessagelist(self.kivy_state_obj.selected_address)
             self.root.ids.id_inbox.children[1].active = False
-        elif instance.text == 'Trash':
-            self.root.ids.id_trash.clear_widgets()
-            self.root.ids.id_trash.add_widget(self.data_screen_dict['Trash'].Trash())
+        elif key == 'trash':
             try:
                 self.root.ids.id_trash.children[1].active = False
-            except Exception as e:
-                self.root.ids.id_trash.children[0].children[1].active = False
+            except Exception:
+                pass
 
     @staticmethod
     def get_enabled_addresses():
@@ -560,7 +578,7 @@ class NavigateApp(MDApp):
             AddressChangingLoader().open()
             for nav_obj in self.root.ids.content_drawer.children[
                     0].children[0].children[0].children:
-                nav_obj.active = True if nav_obj.text == 'Inbox' else False
+                nav_obj.active = True if self._nav_key(nav_obj) == 'inbox' else False
             self.file_manager_setting()
             Clock.schedule_once(self.set_current_account_data, 0.5)
 

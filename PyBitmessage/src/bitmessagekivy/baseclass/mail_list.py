@@ -209,6 +209,16 @@ def _status_text(status):
     return _STATUS_ZH.get(status, status)
 
 
+def _hits_button(widget, x, y):
+    """True when (x, y) lands on a Button inside *widget*."""
+    for child in widget.children:
+        if isinstance(child, Button) and child.collide_point(x, y):
+            return True
+        if _hits_button(child, x, y):
+            return True
+    return False
+
+
 def _install_taps(ml, on_tap):
     """Route taps on the list to the row that was hit.
 
@@ -224,6 +234,11 @@ def _install_taps(ml, on_tap):
             row = getattr(child, 'touch_args', None)
             if row is None:
                 continue
+            if _hits_button(child, touch.x, touch.y):
+                # Let the row's action buttons (恢复/彻底删除/删除) receive it.
+                # Swallowing the touch here made them dead: pressing one only
+                # opened the message detail.
+                return False
             if child.collide_point(touch.x, touch.y):
                 if getattr(touch, 'grab_current', None) is None:
                     try:
