@@ -234,7 +234,6 @@ class Lang(BaseLanguage):
         'Subject': '主题',
         'Body': '内容',
         'Type or Select sender address': '输入或选择发件地址',
-        'Type or Scan QR code for recipients address': '输入或扫描二维码获取收件地址',
         'Add contact': '添加联系人',
         'Save': '保存',
         'Cancel': '取消',
@@ -363,6 +362,9 @@ class NavigateApp(MDApp):
         print(
             'SETSCREEN: %r available=%r' % (
                 screen_name, manager.screen_names), flush=True)
+        if manager.current and manager.current != screen_name:
+            # remembered so the back arrow can actually go back
+            self._previous_screen = manager.current
         manager.current = screen_name
 
     def run(self):
@@ -587,7 +589,10 @@ class NavigateApp(MDApp):
         self.set_navbar_for_composer()
         composer_obj = self.root.ids.id_create.children[1].ids
         composer_obj.ti.text = ''
-        composer_obj.composer_dropdown.text = 'Select'
+        try:
+            self.root.ids.id_create.children[1].select_default_sender()
+        except Exception:  # noqa: BLE001 - keep the old behaviour if it fails
+            composer_obj.composer_dropdown.text = 'Select'
         composer_obj.txt_input.text = ''
         composer_obj.subject.text = ''
         composer_obj.body.text = ''
@@ -743,11 +748,33 @@ class NavigateApp(MDApp):
         self.root.ids.scr_mngr.transition.unbind(on_complete=self.reset)
 
     def back_press(self):
-        """Method for, reverting composer to previous page"""
-        if self.root.ids.scr_mngr.current == 'showqrcode':
+        """Leave the composer and go back to the page we came from.
+
+        This used to only unbind a transition and clear a flag -- it never
+        changed the screen, so the top-left arrow did nothing (reported
+        2026-11-26). It now restores the recorded previous screen, falling back
+        to the inbox.
+        """
+        manager = self.root.ids.scr_mngr
+        current = manager.current
+        if current == 'showqrcode':
             self.set_common_header()
-            self.root.ids.scr_mngr.current = 'myaddress'
-        self.root.ids.scr_mngr.transition.bind(on_complete=self.reset)
+            manager.current = 'myaddress'
+            self.kivy_state.in_composer = False
+            return
+        if current == 'create' and 'inbox' in manager.screen_names:
+            # the composer is opened by the inbox FAB; going back there is
+            # what the user expects, even if the history says otherwise
+            target = 'inbox'
+        else:
+            target = getattr(self, '_previous_screen', None)
+        if not target or target == current or target not in manager.screen_names:
+            target = 'messaging' if 'messaging' in manager.screen_names else current
+        print('BACK: %r -> %r' % (current, target), flush=True)
+        self.set_common_header()
+        manager.transition.bind(on_complete=self.reset)
+        manager.current = target
+        self._previous_screen = None
         self.kivy_state.in_composer = False
 
     def set_toolbar_for_qr_code(self):
