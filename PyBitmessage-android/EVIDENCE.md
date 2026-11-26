@@ -591,6 +591,41 @@ WANT_READ/WANT_WRITE），对端永远等不到 verack。公网连接能成功�
 - 立项 **M4.8.6**（见 MILESTONES）：桥接/握手竞态调查与修复
 - M4.8.2 的送达实测改期：平板回到可用网络（家里/办公 Wi-Fi）后重测
 
+### 1.68 ✅ M7.5 发消息页右上角「飞机」发送键点了没反应（2026-11-26 10:15）
+
+**用户反馈**：发消息界面右上角的发送（纸飞机）图标按了没反应。
+
+**根因（一句话）**：`send()` 被定义在了**错误的类**上。
+
+```
+COMPOSER send failed: AttributeError("'DropDownWidget' object has no attribute 'send'")
+```
+
+工具栏的动作是 `_composer_action('send')`，它取 `root.ids.id_create.children[1]`（也就是
+`DropDownWidget`）再 `getattr(composer, 'send')`；而此前那次"补上 send 方法"的修补
+**被追加到了 `SelectableLabel`**（地址联想列表的行控件）里 —— 于是按钮每次点击都抛
+AttributeError，又被 `_composer_action` 的 `except` 吞成一行日志，界面上完全没有反馈。
+
+**修复**（commit `1d2eb0f`）
+
+1. 把 `send()` / `_notify()` 从 `SelectableLabel` 移到 `DropDownWidget`（工具栏真正调用的对象）
+2. `messaging.send_message()` 新增 `from_address` 参数：**发件地址下拉框现在真的生效**，
+   以前不管选哪个都只用主地址发送
+3. 发送成功后 1.2 秒自动 `back_press()` 回收件箱 —— 让"已发出"这件事有可见结果
+
+**设备验证**
+
+```
+COMPOSER send to=BM-2cUsjghNy4fQHYxD3yrHACGT88zB5u5Mcj
+              from=BM-2cXrmLDcoGry6Z4kRWqCthD7kuhRxkzaWx len(body)=6
+BACK: 'create' -> 'inbox'
+```
+`getAllSentMessages` 条数 **13 → 14**，最新一条 status 为 `ackreceived`。
+
+**为什么之前没发现**：`_composer_action()` 会把异常"记一行日志然后吞掉"（那是为了修
+"发送时整个 UI 卡死"的历史问题），所以按钮失效的表现就是**完全安静**——只有翻应用日志
+才看得到 `AttributeError`。这次正是靠 M6.6 新增的设备端日志才直接定位。
+
 ### 1.67 ✅✅✅ M7.4 硬件返回键 + M7.1 收件箱可删除（2026-11-26 09:45 设备验收）
 
 装机：run 45734601487（`pybitmessage-0.6.3.2-m71-2026-11-26.apk`，本钥重签，零热补丁）。

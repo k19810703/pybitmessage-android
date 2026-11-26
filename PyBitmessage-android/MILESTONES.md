@@ -295,6 +295,8 @@ UI 与 API 两条路都创建不了地址，没有地址就没有后续一切。
 | M4.6.1 | 崩溃自恢复 | 服务重启 + 启动自检 | 3h | **L**：`am kill` 后 1 分钟内进程恢复 |
 | M4.7.1 | 电量策略（仅 Wi-Fi/充电同步） | 设置项 + 网络策略 | 4h | **T**：1 小时后台耗电 ≤ 8%（C3） |
 
+| **M7.5** ✅ | 发消息页发送（纸飞机）键无反应 | `send()` 被定义在 `SelectableLabel` 上，而工具栏调用的是 `DropDownWidget.send` | 方法归位；`send_message` 支持 `from_address`（发件下拉生效）；成功后自动返回 | **S**：填好表单点发送后消息进入已发送；**L**：`COMPOSER send to=… from=…` | **通过**（EVIDENCE §1.68）：已发送 13→14，status `ackreceived` | M7 | 高（用户反馈） |
+
 | **M7.3** ✅ | 发消息页返回箭头无效 | `back_press()` 只清标志位、从不切 screen | 记录来源页 + 真正返回（create → inbox） | **S**：点箭头回到收件箱；**L**：`BACK: 'create' -> 'inbox'` | **通过**（EVIDENCE §1.66） | M7 | 高（用户反馈） |
 
 | **M7.4** ✅ | 安卓硬件返回键直接退出 App | 没有任何 `on_keyboard` 处理，系统默认关 Activity | 在非首页时拦截 KEYCODE_BACK 走 `back_press()` | **S**：按硬件返回回到上一页而不是退出 | **通过**（EVIDENCE §1.67）：`BACK: 'create' -> 'inbox'`，进程存活 | M7 | 中 |
