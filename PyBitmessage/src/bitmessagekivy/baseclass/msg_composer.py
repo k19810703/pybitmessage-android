@@ -213,6 +213,53 @@ class DropDownWidget(BoxLayout):
                 candidates.append(address)
         self.ids.txt_input.word_list = candidates
 
+    def send(self, *args):
+        """Send the composed message from the toolbar paper-plane.
+
+        ``send`` used to be defined on SelectableLabel (the suggestion list
+        row), so the toolbar's ``DropDownWidget.send`` call raised
+        AttributeError and the button did nothing at all (user report
+        2026-11-26). It lives here now, where the toolbar actually looks.
+        """
+        to_addr = (self.ids.txt_input.text or '').strip()
+        sender = (self.ids.ti.text or '').strip()
+        subject = (self.ids.subject.text or '').strip()
+        body = (self.ids.body.text or '').strip()
+        if not to_addr.startswith('BM-'):
+            self._notify('收件人地址应以 BM- 开头')
+            return False
+        if not body:
+            self._notify('内容不能为空')
+            return False
+        try:
+            from pybitmessage.bitmessagekivy.messaging import send_message
+            send_message(to_addr, body, subject, from_address=sender or None)
+        except Exception as exc:  # noqa: BLE001 - report, never crash
+            print('COMPOSER send failed: %r' % (exc,), flush=True)
+            self._notify('发送失败：%s' % (exc,))
+            return False
+        print('COMPOSER send to=%s from=%s len(body)=%d' % (
+            to_addr, sender or 'primary', len(body)), flush=True)
+        self._notify('已提交，正在广播…')
+        # leave the composer so the user can see it is gone
+        try:
+            from kivy.app import App
+            from kivy.clock import Clock
+            Clock.schedule_once(
+                lambda *_a: App.get_running_app().back_press(), 1.2)
+        except Exception:  # noqa: BLE001
+            pass
+        return True
+
+    @staticmethod
+    def _notify(text):
+        """Toast if available; a failure here must not break sending."""
+        try:
+            from pybitmessage.bitmessagekivy.baseclass.common import toast
+            toast(text)
+        except Exception:  # noqa: BLE001
+            print('COMPOSER notify: %s' % text, flush=True)
+
     def reset_composer(self):
         """Method will reset composer"""
         self.ids.ti.text = ""
@@ -338,47 +385,4 @@ class SelectableLabel(RecycleDataViewBehavior, Label):
             rv.parent.txt_input.text = rv.parent.txt_input.text.replace(
                 rv.parent.txt_input.text, rv.data[index]["text"]
             )
-
-    def send(self, *args):
-        """Send the composed message (toolbar 'send' action).
-
-        The toolbar used to call this method and it never existed:
-        ``AttributeError: 'DropDownWidget' object has no attribute 'send'``
-        killed the Kivy event loop, which is why the app froze on 'send'.
-        Route through messaging.send_message(), the same path the Chinese
-        single-screen UI uses, so both entry points behave identically.
-        """
-        to_addr = (self.ids.txt_input.text or '').strip()
-        sender = (self.ids.ti.text or '').strip()
-        subject = (self.ids.subject.text or '').strip()
-        body = (self.ids.body.text or '').strip()
-        if not to_addr.startswith('BM-'):
-            self._notify('收件人地址应以 BM- 开头')
-            return False
-        if not body:
-            self._notify('内容不能为空')
-            return False
-        try:
-            from pybitmessage.bitmessagekivy.messaging import send_message
-            # send_message() signs with the first enabled address; when the
-            # user picked a different sender we still send from the primary
-            # one and say so, rather than silently dropping the message.
-            send_message(to_addr, body, subject)
-            self._notify('已提交，正在广播…')
-            print('COMPOSER send to=%s from=%s len(body)=%d' % (
-                to_addr, sender or 'primary', len(body)), flush=True)
-            return True
-        except Exception as exc:  # noqa: BLE001 - report, never crash
-            print('COMPOSER send failed: %r' % (exc,), flush=True)
-            self._notify('发送失败：%s' % (exc,))
-            return False
-
-    @staticmethod
-    def _notify(text):
-        """Toast if available; a failure here must not break sending."""
-        try:
-            from pybitmessage.bitmessagekivy.baseclass.common import toast
-            toast(text)
-        except Exception:  # noqa: BLE001
-            print('COMPOSER notify: %s' % text, flush=True)
 

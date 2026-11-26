@@ -79,9 +79,13 @@ def create_address(label='phone'):
     return queues.apiAddressGeneratorReturnQueue.get(timeout=120)
 
 
-def send_message(to_address, body, subject=''):
-    """Queue a message exactly like the XML-RPC API does."""
-    me = my_address()
+def send_message(to_address, body, subject='', from_address=None):
+    """Queue a message exactly like the XML-RPC API does.
+
+    *from_address* lets the composer honour its sender dropdown; the worker
+    signs with whatever address the ``sent`` row carries.
+    """
+    me = from_address or my_address()
     if not me:
         raise RuntimeError('还没有地址')
     h = helper_sent.insert(
