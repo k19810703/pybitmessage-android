@@ -20,6 +20,7 @@ from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
+from kivy.clock import Clock
 from kivy.uix.screenmanager import Screen
 
 from kivymd.uix.textfield import MDTextField
@@ -44,7 +45,51 @@ class Create(Screen):
         self.dropdown_widget = DropDownWidget()
         self.dropdown_widget.ids.txt_input.starting_no = 2
         self.add_widget(self.dropdown_widget)
+        # 发件地址默认取第一个身份：以前是个空输入框，用户得手打自己地址
+        # （M7.2.1）。下拉框仍然可以改。
+        self._apply_defaults()
         self.children[0].ids.id_scroll.bind(scroll_y=self.check_scroll_y)
+
+    def _apply_defaults(self, *_args):
+        """Pick the sender once the identity list actually has entries.
+
+        This screen is not a ScreenManager child, so ``on_pre_enter`` never
+        fires (the dropdown stayed at "Select" on device). identity_list is
+        filled asynchronously by the core, so poll briefly and also react to
+        later changes.
+        """
+        try:
+            app = App.get_running_app()
+            if app is not None and not getattr(self, '_bound_identities', False):
+                app.bind(identity_list=lambda *_: self._apply_defaults())
+                self._bound_identities = True
+        except Exception:  # noqa: BLE001
+            pass
+        tries = getattr(self, '_default_tries', 0)
+        try:
+            self.dropdown_widget.select_default_sender()
+            self.dropdown_widget.refresh_candidates()
+        except Exception as exc:  # noqa: BLE001
+            print('COMPOSER defaults: %r' % (exc,), flush=True)
+        if getattr(self, '_default_tries', 0) is not None:
+            self._default_tries = tries + 1
+        # keep trying for the first ~15s in case the core is still starting
+        if self._default_tries < 30 and (
+                (self.dropdown_widget.ids.composer_dropdown.text or 'Select')
+                == 'Select'):
+            Clock.schedule_once(self._apply_defaults, 0.5)
+
+    def on_pre_enter(self, *args):
+        """Apply the default sender every time the screen is shown.
+
+        identity_list is filled by the core asynchronously, so doing this only
+        in __init__ left the dropdown showing "Select" (seen on device).
+        """
+        try:
+            self.dropdown_widget.select_default_sender()
+            self.dropdown_widget.refresh_candidates()
+        except Exception as exc:  # noqa: BLE001 - never block the screen
+            print('COMPOSER on_pre_enter: %r' % (exc,), flush=True)
 
     def check_scroll_y(self, instance, somethingelse):  # pylint: disable=unused-argument
         """show data on scroll down"""
@@ -88,19 +133,98 @@ class DropDownWidget(BoxLayout):
         state.kivyapp.back_press()
         toast("sent")
 
+    def select_default_sender(self):
+        """Point the sender at the first enabled identity (no typing needed)."""
+        identities = list(getattr(self.kivy_running_app, 'identity_list', []) or [])
+        if not identities:
+            try:
+                try:
+                    from bmconfigparser import config
+                except ImportError:      # package-style import inside the APK
+                    from pybitmessage.bmconfigparser import config
+                identities = [str(addr) for addr in config.addresses()
+                              if config.getboolean(str(addr), 'enabled')]
+            except Exception as exc:  # noqa: BLE001
+                print('COMPOSER fallback failed: %r' % (exc,), flush=True)
+                identities = []
+        if not identities:
+            self.ids.ti.text = ''
+            return
+        current = (self.ids.composer_dropdown.text or '').strip()
+        chosen = current if current in identities else identities[0]
+        self.ids.composer_dropdown.text = chosen
+        self.ids.ti.text = chosen
+        print('COMPOSER sender=%s (of %d)' % (chosen, len(identities)),
+              flush=True)
+
+    def paste_recipient(self):
+        """Paste the clipboard into the recipient field.
+
+        Long-press bubble paste is unreliable with the on-device keyboard
+        (reported M7.2.2), so the field gets an explicit button.
+        """
+        try:
+            # Kivy's clipboard is empty on this device; go through Android's
+            # ClipboardManager first (see clipbridge.py).
+            try:
+                from clipbridge import get_text
+            except ImportError:
+                from pybitmessage.clipbridge import get_text
+            text = (get_text() or '').strip()
+            print('COMPOSER paste: %d chars' % len(text), flush=True)
+        except Exception as exc:  # noqa: BLE001 - clipboard may be unavailable
+            toast('读取剪贴板失败：%s' % exc)
+            return
+        if not text:
+            toast('剪贴板是空的')
+            return
+        # A pasted share text may be "address" or "label <address>": keep the
+        # first token that looks like an address.
+        for token in text.replace('\n', ' ').split():
+            if token.startswith('BM-'):
+                self.ids.txt_input.text = token
+                break
+        else:
+            self.ids.txt_input.text = text.split()[0] if text.split() else text
+        self.ids.txt_input.focus = True
+
+    def refresh_candidates(self):
+        """Fill the recipient suggestion list from the address book.
+
+        The RecycleView under the recipient field was never populated, so it
+        showed as an empty box with no function (reported M7.2.3).
+        """
+        candidates = []
+        try:
+            from helper_sql import sqlQuery
+            for label, address in sqlQuery(
+                    'SELECT label, address FROM addressbook'):
+                label = label.decode('utf-8', 'replace') if isinstance(
+                    label, (bytes, bytearray)) else str(label or '')
+                address = address.decode('utf-8', 'replace') if isinstance(
+                    address, (bytes, bytearray)) else str(address or '')
+                if address:
+                    candidates.append(
+                        '%s %s' % (label, address) if label else address)
+        except Exception as exc:  # noqa: BLE001 - empty book is fine
+            print('COMPOSER addressbook: %r' % (exc,), flush=True)
+        for address in (getattr(self.kivy_running_app, 'identity_list', []) or []):
+            if address not in candidates:
+                candidates.append(address)
+        self.ids.txt_input.word_list = candidates
+
     def reset_composer(self):
         """Method will reset composer"""
         self.ids.ti.text = ""
-        self.ids.composer_dropdown.text = "Select"
+        self.select_default_sender()
         self.ids.txt_input.text = ""
         self.ids.subject.text = ""
         self.ids.body.text = ""
         toast("Reset message")
 
     def auto_fill_fromaddr(self):
-        """Fill the text automatically From Address"""
+        """Mirror the chosen sender into the read-only display."""
         self.ids.ti.text = self.ids.composer_dropdown.text
-        self.ids.ti.focus = True
 
     def is_camara_attached(self):
         """Checks the camera availability in device"""
@@ -122,6 +246,7 @@ class MyTextInput(MDTextField):
 
     txt_input = ObjectProperty()
     flt_list = ObjectProperty()
+    rv = ObjectProperty(None)
     word_list = ListProperty()
     starting_no = NumericProperty(3)
     suggestion_text = ''
@@ -132,23 +257,50 @@ class MyTextInput(MDTextField):
         self.__lineBreak__ = 0
 
     def on_text(self, instance, value):  # pylint: disable=unused-argument
-        """Find all the occurrence of the word"""
-        self.parent.parent.parent.parent.parent.ids.rv.data = []
-        max_recipient_len = 10
-        box_height = 250
-        box_max_height = 400
+        """Filter the recipient suggestions as the user types."""
+        self._render_suggestions(value)
 
-        matches = [self.word_list[i] for i in range(
-            len(self.word_list)) if self.word_list[
-                i][:self.starting_no] == value[:self.starting_no]]
-        display_data = []
-        for i in matches:
-            display_data.append({'text': i})
-        self.parent.parent.parent.parent.parent.ids.rv.data = display_data
-        if len(matches) <= max_recipient_len:
-            self.parent.height = (box_height + (len(matches) * 20))
-        else:
-            self.parent.height = box_max_height
+    def on_focus(self, _instance, focused):
+        """Refresh the candidate list whenever the field is entered.
+
+        The address book can change while the app runs, and an empty list used
+        to leave the suggestion box on screen doing nothing.
+        """
+        if not focused:
+            return
+        try:
+            self.parent.parent  # noqa: B018 - ensure we are in the tree
+            app = App.get_running_app()
+            create = app.root.ids.id_create
+            create.children[0].refresh_candidates()
+        except Exception:  # noqa: BLE001 - never break typing
+            pass
+        self._render_suggestions(self.text or '')
+
+    def _render_suggestions(self, value):
+        """Show matching candidates, or collapse the box when there are none."""
+        rv = self.rv
+        if rv is None:
+            return
+        value = (value or '').strip()
+        max_recipient_len = 10
+        row_height = 24
+        matches = []
+        if value:
+            prefix = value[:self.starting_no]
+            matches = [item for item in self.word_list
+                       if item[:self.starting_no].lower() == prefix.lower()]
+            matches = matches[:max_recipient_len]
+        rv.data = [{'text': item} for item in matches]
+        if not matches:
+            # collapsed: no invisible dead box under the line (M7.2.3)
+            rv.height = 0
+            rv.opacity = 0
+            rv.disabled = True
+            return
+        rv.height = row_height * len(matches)
+        rv.opacity = 1
+        rv.disabled = False
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
         """Keyboard on key Down"""

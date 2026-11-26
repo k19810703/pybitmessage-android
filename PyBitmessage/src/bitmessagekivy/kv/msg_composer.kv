@@ -10,25 +10,28 @@
             orientation: 'vertical'
             size_hint_y: None
             height: self.minimum_height + 3 * self.parent.height/5
-            padding: dp(20)
+            padding: dp(20), dp(40), dp(20), dp(20)
             spacing: 15
             BoxLayout:
                 orientation: 'vertical'
-                MDTextField:
-                    id: ti
+                size_hint_y: None
+                height: dp(50)
+                MDLabel:
+                    text: app.tr._('Sender address')
+                    font_style: 'Caption'
+                    theme_text_color: 'Secondary'
                     size_hint_y: None
-                    hint_text: app.tr._('Type or Select sender address')
-                    icon_right: 'account'
-                    icon_right_color: app.theme_cls.primary_light
-                    font_size: '15sp'
-                    multiline: False
-                    required: True
-                    height: 100
-                    current_hint_text_color: 0,0,0,0.5
-                    helper_text_mode: "on_error"
-                    canvas.before:
-                        Color:
-                            rgba: (0,0,0,1)
+                    height: dp(18)
+                # 只读显示 + 下拉选择：不允许手打一个不存在的发件地址（M7.2.1）
+                MDLabel:
+                    id: ti
+                    text: app.tr._('(no address)')
+                    font_style: 'Body1'
+                    theme_text_color: 'Primary'
+                    shorten: True
+                    shorten_from: 'right'
+                    size_hint_y: None
+                    height: dp(26)
 
                            
                 BoxLayout:
@@ -56,6 +59,8 @@
                     size : (890, 60)
                     MyTextInput:
                         id: txt_input
+                        rv: root.ids.rv
+                        use_bubble: True
                         size_hint_y: None
                         font_size: '15sp'
                         color: color_font
@@ -68,6 +73,14 @@
 
                     RV:
                         id: rv
+                        # 没匹配项时整块收起（原来是个永远空的框，M7.2.3）
+                        height: 0
+                        opacity: 0
+                        disabled: True
+                MDIconButton:
+                    icon: 'content-paste'
+                    pos_hint: {'center_x': 0.86, 'y': 0.6}
+                    on_release: root.paste_recipient()
                 MDIconButton:
                     icon: 'qrcode-scan'
                     pos_hint: {'center_x': 0.95, 'y': 0.6}

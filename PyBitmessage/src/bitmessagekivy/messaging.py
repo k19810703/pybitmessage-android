@@ -275,9 +275,17 @@ class MessagingScreen(Screen):
 
     def _copy_address(self):
         addr = my_address()
-        if addr:
+        if not addr:
+            return
+        try:
+            # Write to the *system* clipboard too: Kivy's store alone is not
+            # visible to WeChat or the browser (and was not even readable by
+            # our own paste button, see clipbridge.py).
+            from clipbridge import set_text
+            set_text(addr)
+        except Exception:  # noqa: BLE001
             Clipboard.copy(addr)
-            self._set_status('地址已复制')
+        self._set_status('地址已复制')
 
     def _set_status(self, text):
         self.status.text = text

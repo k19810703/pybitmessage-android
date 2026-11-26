@@ -245,6 +245,8 @@ class Lang(BaseLanguage):
         'Max acceptable Difficulty': '可接受的最大难度',
         'Resends Expire': '重发截止',
         'Share logs': '分享日志',
+        'Sender address': '发件地址',
+        '(no address)': '（暂无地址）',
         'Namecoin Integration': 'Namecoin 集成',
         'please enter your text': '请输入内容',
         'To :': '收件人：',
