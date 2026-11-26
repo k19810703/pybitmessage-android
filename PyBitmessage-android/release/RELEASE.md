@@ -7,7 +7,7 @@
 
 | 文件 | 大小 | SHA-256 |
 |---|---|---|
-| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 28 MB | `179d54304a37e3ea5565080a779312e227551ffd8a5add8e09fde3e0c148643a` |
+| `pybitmessage-0.6.3.2-arm64-v8a.apk` | 28 MB | `c920219139b837a46772f4c8ed7f0eacfdfed598caeaa3ea88bd54271c30796c` |
 
 校验：
 
@@ -70,6 +70,7 @@ adb shell run-as at.bitmessage.pybitmessage cat files/bitmessage/keys.vault > ke
 | 收件箱可删除（回收站可恢复/彻底删除） | ✅ |
 | 发消息页：发件地址下拉、粘贴按钮、地址联想 | ✅ |
 | 硬件返回键/左上箭头：返回上一页而不是退出 | ✅ |
+| 发消息页「发送」按钮可用（可填表单直接发） | ✅ |
 
 ## 已知限制
 
