@@ -7,14 +7,15 @@ from kivy.app import App
 from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.dialog import MDDialog
 
-POPUP_HEIGHT_PROPORTION = 0.25
+POPUP_HEIGHT_PROPORTION = 0.34
 
 
 class HelperAddressBook(object):
     """Widget utilities for Addressbook."""
 
     @staticmethod
-    def address_detail_popup(obj, send_message, update_address, close_popup, width):
+    def address_detail_popup(obj, send_message, update_address, close_popup,
+                             width, delete_address=None):
         """
         Shows address details in a popup with clear actions.
 
@@ -26,11 +27,17 @@ class HelperAddressBook(object):
             width: The desired width of the popup as a proportion of the screen.
         """
 
+        # Contact deletion lives here on purpose: swiping a row opens this
+        # dialog instead of revealing the swipe layer, so the delete action
+        # has to be reachable from the dialog (reported 2026-11-26).
         buttons = [
-            MDRaisedButton(text="Send message", on_release=send_message),
-            MDRaisedButton(text="Update Address", on_release=update_address),
-            MDRaisedButton(text="Cancel", on_release=close_popup),
+            MDRaisedButton(text="发送消息", on_release=send_message),
+            MDRaisedButton(text="修改标签", on_release=update_address),
         ]
+        if delete_address is not None:
+            buttons.append(
+                MDRaisedButton(text="删除", on_release=delete_address))
+        buttons.append(MDRaisedButton(text="取消", on_release=close_popup))
 
         return MDDialog(
             type="custom",

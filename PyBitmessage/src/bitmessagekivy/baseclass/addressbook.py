@@ -103,6 +103,10 @@ class AddressBook(Screen, HelperAddressBook):
             message_row.ids.avater_img.source = image
             listItem.bind(on_release=partial(self.addBook_detail, item[1], item[0], message_row))
             message_row.ids.delete_msg.bind(on_press=partial(self.delete_address, item[1]))
+            # The trash button shipped disabled and was only enabled by the
+            # row's on_release when the card happened to be open -- so swiping
+            # showed a grey, dead button (user report 2026-11-26).
+            message_row.ids.delete_msg.disabled = False
             self.ids.ml.add_widget(message_row)
 
     def check_scroll_y(self, instance, _):
@@ -133,24 +137,62 @@ class AddressBook(Screen, HelperAddressBook):
                 width = POPUP_WIDTH_ANDROID if platform == 'android' else POPUP_WIDTH_OTHER
                 self.addbook_popup = self.address_detail_popup(
                     obj, self.send_message_to, self.update_addbook_label,
-                    self.close_pop, width)
+                    self.close_pop, width,
+                    delete_address=partial(self.delete_address, address))
                 self.addbook_popup.auto_dismiss = False
                 self.addbook_popup.open()
         else:
             instance.ids.delete_msg.disabled = False
 
     def delete_address(self, address, instance, *args):
-        """Delete address from the address book"""
-        self.ids.ml.remove_widget(instance.parent.parent)
-        if self.ids.ml.children:
-            self.ids.tag_label.text = ''
-        sqlExecute("DELETE FROM addressbook WHERE address = ?", address)
-        toast('Address Deleted')
+        """Delete a contact after asking, then refresh the list."""
+        from kivy.metrics import dp
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.label import Label
+        from kivy.uix.popup import Popup
+        from pybitmessage.bitmessagekivy.baseclass.mail_list import cjk_font
+
+        font = cjk_font()
+        box = BoxLayout(orientation='vertical', padding=dp(12), spacing=dp(10))
+        box.add_widget(Label(text='删除这个联系人？', font_name=font,
+                             font_size=dp(14)))
+        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
+        popup = Popup(title='删除联系人', title_font=font, content=box,
+                      size_hint=(.8, .32))
+
+        def do_delete(*_a):
+            try:
+                sqlExecute("DELETE FROM addressbook WHERE address = ?",
+                           address)
+                print('ADDRESSBOOK deleted %s' % address, flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print('ADDRESSBOOK delete failed: %r' % (exc,), flush=True)
+                toast('删除失败：%s' % (exc,))
+            popup.dismiss()
+            try:
+                if self.addbook_popup is not None:
+                    self.addbook_popup.dismiss()
+                    self.addbook_popup = None
+            except Exception:  # noqa: BLE001
+                pass
+            self.ids.ml.clear_widgets()
+            self.loadAddresslist(None, 'All', '')
+            toast('已删除')
+
+        cancel = Button(text='取消', font_name=font, font_size=dp(14))
+        ok = Button(text='删除', font_name=font, font_size=dp(14))
+        cancel.bind(on_release=lambda *_: popup.dismiss())
+        ok.bind(on_release=do_delete)
+        buttons.add_widget(cancel)
+        buttons.add_widget(ok)
+        box.add_widget(buttons)
+        popup.open()
 
     def close_pop(self, instance):
         """Cancel and close the popup"""
         self.addbook_popup.dismiss()
-        toast('Canceled')
+        toast('已取消')
 
     def update_addbook_label(self, instance):
         """Update the label of the address book"""
